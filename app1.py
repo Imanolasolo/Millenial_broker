@@ -59,14 +59,32 @@ def init_db():
     conn.close()
 
 # Función para autenticar usuarios
+SECRET_KEY = "your_secret_key"  # Ensure SECRET_KEY is defined
+
 def authenticate(username, password):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE username=?", (username,))
     user = cursor.fetchone()
     conn.close()
+    
+    if not user or len(user) < 4:
+        raise ValueError("Invalid user object structure")
+    
     if user and bcrypt.checkpw(password.encode(), user[2].encode()):
-        token = jwt.encode({"username": user[1], "role": user[3], "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)}, SECRET_KEY, algorithm="HS256")
+        try:
+            token = jwt.encode(
+                {
+                    "username": user[1],
+                    "role": user[3],
+                    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+                },
+                SECRET_KEY,
+                algorithm="HS256"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error encoding JWT: {e}")
+        
         return token
     return None
 

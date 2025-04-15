@@ -11,7 +11,7 @@ from dbconfig import DB_FILE, SECRET_KEY, initialize_database  # Import the func
 from user_dashboard import user_dashboard  # Import the refactored function
 
 # Configuración inicial
-st.set_page_config(page_title="Millenial Broker", layout="wide")
+st.set_page_config(page_icon="logo.png", page_title="Millenial Broker", layout="wide")
 
 # Llamar a la función para inicializar la base de datos
 initialize_database()

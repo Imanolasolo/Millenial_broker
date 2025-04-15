@@ -118,7 +118,8 @@ def main():
             if role == "admin":
                 admin_dashboard()  # Call the admin_dashboard directly for admin role
             else:
-                dashboard_path = f"f:\\CODECODIX\\MILLENIAL_BROKER_project\\dashboards\\{role}_dashboard.py"
+                # Dynamically construct the dashboard path
+                dashboard_path = os.path.join(os.path.dirname(__file__), "dashboards", f"{role}_dashboard.py")
                 
                 if os.path.exists(dashboard_path):
                     spec = importlib.util.spec_from_file_location(f"{role}_dashboard", dashboard_path)

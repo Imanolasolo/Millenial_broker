@@ -64,14 +64,19 @@ SECRET_KEY = "your_secret_key"  # Ensure SECRET_KEY is defined
 def authenticate(username, password):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username=?", (username,))
+    cursor.execute("SELECT * FROM users WHERE username=?", (username.strip(),))  # Strip whitespace
     user = cursor.fetchone()
     conn.close()
     
-    if not user or len(user) < 4:
-        raise ValueError("Invalid user object structure")
+    if not user:
+        st.error("Usuario no encontrado. Verifique su nombre de usuario.")
+        return None
     
-    if user and bcrypt.checkpw(password.encode(), user[2].encode()):
+    if len(user) < 4:
+        st.error("Estructura de usuario inválida en la base de datos. Contacte al administrador.")
+        return None
+    
+    if bcrypt.checkpw(password.encode(), user[2].encode()):
         try:
             token = jwt.encode(
                 {
@@ -83,9 +88,12 @@ def authenticate(username, password):
                 algorithm="HS256"
             )
         except Exception as e:
-            raise RuntimeError(f"Error encoding JWT: {e}")
+            st.error(f"Error al generar el token de autenticación: {e}")
+            return None
         
         return token
+    
+    st.error("Contraseña incorrecta. Inténtelo de nuevo.")
     return None
 
 # Página de login

@@ -11,22 +11,64 @@ def initialize_database():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        # Crear tabla de clientes si no existe
-        cursor.execute("""
+        # Crear tabla de clientes
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS clients (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                phone TEXT NOT NULL
+                tipo_cliente TEXT,
+                nombres TEXT,
+                apellidos TEXT,
+                razon_social TEXT,
+                tipo_documento TEXT,
+                numero_documento TEXT,
+                fecha_nacimiento TEXT,
+                nacionalidad TEXT,
+                sexo TEXT,
+                estado_civil TEXT,
+                correo_electronico TEXT,
+                telefono_movil TEXT,
+                telefono_fijo TEXT,
+                direccion_domicilio TEXT,
+                provincia TEXT,
+                ciudad TEXT,
+                codigo_postal TEXT,
+                ocupacion_profesion TEXT,
+                empresa_trabajo TEXT,
+                tipo_empresa TEXT,
+                ingresos_mensuales TEXT,
+                nivel_educacion TEXT,
+                fumador TEXT,
+                actividades_riesgo TEXT,
+                historial_medico TEXT,
+                historial_siniestros TEXT,
+                vehiculos_registrados TEXT,
+                propiedades TEXT,
+                tipo_contribuyente TEXT,
+                numero_ruc TEXT,
+                representante_legal_id INTEGER,
+                observaciones_legales TEXT,
+                canal_preferido_contacto TEXT,
+                notas_adicionales TEXT,
+                fecha_registro TEXT,
+                ultima_actualizacion TEXT
             )
-        """)
-        # Crear tabla de roles si no existe
-        cursor.execute("""
+        ''')
+        # Crear tabla de roles
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS roles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL
             )
-        """)
+        ''')
+        # Crear tabla de logs de roles
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS role_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL,
+                action TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
     except Exception as e:
         st.error(f"Error al inicializar la base de datos: {e}")
@@ -126,6 +168,11 @@ def admin_dashboard():
                         
                         # Crear automáticamente el dashboard para el nuevo rol
                         create_dashboard(new_role_name)
+
+                        # Registrar el log de creación del rol
+                        cursor.execute("INSERT INTO role_logs (role_name, action) VALUES (?, ?)", 
+                                       (new_role_name, "Creación"))
+                        conn.commit()
                     except sqlite3.IntegrityError:
                         st.error("El rol ya existe")
                     finally:
@@ -191,6 +238,11 @@ def admin_dashboard():
                         cursor.execute("DELETE FROM roles WHERE id = ?", (selected_role[0],))
                         conn.commit()
                         st.success("Rol borrado exitosamente")
+
+                        # Registrar el log de eliminación del rol
+                        cursor.execute("INSERT INTO role_logs (role_name, action) VALUES (?, ?)", 
+                                       (selected_role[1], "Eliminación"))
+                        conn.commit()
                     except sqlite3.IntegrityError:
                         st.error("No se puede borrar el rol porque está asignado a usuarios.")
                     finally:
@@ -291,13 +343,47 @@ def admin_dashboard():
 
         if operation == "Crear":
             st.subheader("Crear Nuevo Cliente")
-            new_client_name = st.text_input("Nombre del Cliente", key="new_client_name")
-            new_client_email = st.text_input("Correo Electrónico", key="new_client_email")
-            new_client_phone = st.text_input("Teléfono", key="new_client_phone")
-
+            fields = {
+                "tipo_cliente": st.text_input("Tipo de Cliente"),
+                "nombres": st.text_input("Nombres"),
+                "apellidos": st.text_input("Apellidos"),
+                "razon_social": st.text_input("Razón Social"),
+                "tipo_documento": st.text_input("Tipo de Documento"),
+                "numero_documento": st.text_input("Número de Documento"),
+                "fecha_nacimiento": st.text_input("Fecha de Nacimiento"),
+                "nacionalidad": st.text_input("Nacionalidad"),
+                "sexo": st.text_input("Sexo"),
+                "estado_civil": st.text_input("Estado Civil"),
+                "correo_electronico": st.text_input("Correo Electrónico"),
+                "telefono_movil": st.text_input("Teléfono Móvil"),
+                "telefono_fijo": st.text_input("Teléfono Fijo"),
+                "direccion_domicilio": st.text_input("Dirección de Domicilio"),
+                "provincia": st.text_input("Provincia"),
+                "ciudad": st.text_input("Ciudad"),
+                "codigo_postal": st.text_input("Código Postal"),
+                "ocupacion_profesion": st.text_input("Ocupación/Profesión"),
+                "empresa_trabajo": st.text_input("Empresa de Trabajo"),
+                "tipo_empresa": st.text_input("Tipo de Empresa"),
+                "ingresos_mensuales": st.text_input("Ingresos Mensuales"),
+                "nivel_educacion": st.text_input("Nivel de Educación"),
+                "fumador": st.text_input("Fumador"),
+                "actividades_riesgo": st.text_input("Actividades de Riesgo"),
+                "historial_medico": st.text_input("Historial Médico"),
+                "historial_siniestros": st.text_input("Historial de Siniestros"),
+                "vehiculos_registrados": st.text_input("Vehículos Registrados"),
+                "propiedades": st.text_input("Propiedades"),
+                "tipo_contribuyente": st.text_input("Tipo de Contribuyente"),
+                "numero_ruc": st.text_input("Número RUC"),
+                "representante_legal_id": st.text_input("ID del Representante Legal"),
+                "observaciones_legales": st.text_input("Observaciones Legales"),
+                "canal_preferido_contacto": st.text_input("Canal Preferido de Contacto"),
+                "notas_adicionales": st.text_input("Notas Adicionales"),
+                "fecha_registro": st.text_input("Fecha de Registro"),
+                "ultima_actualizacion": st.text_input("Última Actualización"),
+            }
             if st.button("Crear Cliente", key="create_client_button"):
-                if new_client_name and new_client_email and new_client_phone:
-                    result = create_client(new_client_name, new_client_email, new_client_phone)
+                if all(fields.values()):
+                    result = create_client(**fields)
                     st.success(result) if "exitosamente" in result else st.error(result)
                 else:
                     st.error("Por favor, completa todos los campos.")
@@ -306,43 +392,34 @@ def admin_dashboard():
             st.subheader("Lista de Clientes")
             clients = read_clients()
             if clients:
-                for client in clients:
-                    st.write(f"Nombre: {client[0]}, Correo: {client[1]}, Teléfono: {client[2]}")
+                import pandas as pd
+                df = pd.DataFrame(clients)
+                st.dataframe(df)  # Display as a table
             else:
                 st.info("No hay clientes registrados.")
 
         elif operation == "Modificar":
             st.subheader("Modificar Cliente")
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute("SELECT email FROM clients")
-            clients = [client[0] for client in cursor.fetchall()]
-            conn.close()
-
+            clients = read_clients()
             if clients:
-                selected_client = st.selectbox("Selecciona un cliente para modificar", clients)
-                new_name = st.text_input("Nuevo Nombre (opcional)")
-                new_phone = st.text_input("Nuevo Teléfono (opcional)")
-
+                selected_client = st.selectbox("Selecciona un cliente para modificar", clients, 
+                                               format_func=lambda x: f"{x['nombres']} {x['apellidos']} ({x['correo_electronico']})")
+                updates = {field: st.text_input(f"Nuevo {field.replace('_', ' ').capitalize()}", value=selected_client[field]) 
+                           for field in selected_client.keys() if field != "id"}
                 if st.button("Modificar Cliente"):
-                    result = update_client(selected_client, new_name, new_phone)
+                    result = update_client(selected_client["correo_electronico"], **updates)
                     st.success(result) if "exitosamente" in result else st.error(result)
             else:
                 st.info("No hay clientes disponibles para modificar.")
 
         elif operation == "Borrar":
             st.subheader("Borrar Cliente")
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute("SELECT email FROM clients")
-            clients = [client[0] for client in cursor.fetchall()]
-            conn.close()
-
+            clients = read_clients()
             if clients:
-                selected_client = st.selectbox("Selecciona un cliente para borrar", clients)
-
+                selected_client = st.selectbox("Selecciona un cliente para borrar", clients, 
+                                               format_func=lambda x: f"{x['nombres']} {x['apellidos']} ({x['correo_electronico']})")
                 if st.button("Borrar Cliente"):
-                    result = delete_client(selected_client)
+                    result = delete_client(selected_client["correo_electronico"])
                     st.success(result) if "exitosamente" in result else st.error(result)
             else:
                 st.info("No hay clientes disponibles para borrar.")

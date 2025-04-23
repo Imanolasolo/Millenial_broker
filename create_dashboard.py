@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from dbconfig import DB_FILE
+import streamlit as st
 
 def create_dashboard(role_name):
     """
@@ -18,18 +19,23 @@ def create_dashboard(role_name):
     content = f"""
 # filepath: {file_path}
 # Dashboard para el rol: {role_name}
-
+import streamlit as st
 def welcome_message():
-    print("Bienvenido al dashboard del rol: {role_name}")
+    st.header("Bienvenido al dashboard del rol: :red[ {role_name} ]")
 
 def manage_modules():
-    # Aquí se gestionarán los módulos necesarios para este rol
-    print("Gestionando módulos para el rol: {role_name}")
+    # Aquí se gestionarán los modulos necesarios para este rol
+    st.write("Gestionando modulos para el rol: {role_name}")
+
+    if st.button("Logout"):
+        del st.session_state["token"]  # Eliminar el token de la sesión
+        st.success("Sesion cerrada exitosamente")
+        st.rerun()  # Recargar la página para volver al login
     """
     # Crear el archivo
     with open(file_path, "w") as file:
         file.write(content.strip())
-    print(f"Dashboard creado: {file_path}")
+    st.success(f"Dashboard creado: {file_path}")
 
 def create_dashboards_for_existing_roles():
     """

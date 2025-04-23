@@ -3,6 +3,8 @@
 
 import streamlit as st
 
+import streamlit as st
+
 def welcome_message():
     st.markdown("### **Bienvenido al dashboard del rol: :red[Ejecutivo Comercial]**")  # Usar st.markdown para encabezado en negrita
     

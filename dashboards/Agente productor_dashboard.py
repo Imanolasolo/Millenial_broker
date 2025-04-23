@@ -1,5 +1,5 @@
-# filepath: f:\CODECODIX\MILLENIAL_BROKER_project\dashboards\Agente productor_dashboard.py
-# Dashboard para el rol: Agente productor
+# filepath: f:\CODECODIX\MILLENIAL_BROKER_project\dashboards\Agente Productor_dashboard.py
+# Dashboard para el rol: Agente Productor
 import streamlit as st
 
 def welcome_message():

@@ -86,4 +86,23 @@ def initialize_database():
         """)
         conn.commit()
 
+        # Crear tabla de pólizas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS polizas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_poliza TEXT UNIQUE NOT NULL,
+                cliente_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                tipo_poliza TEXT NOT NULL,
+                cobertura TEXT NOT NULL,
+                prima TEXT NOT NULL,
+                fecha_inicio TEXT NOT NULL,
+                fecha_fin TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                FOREIGN KEY (cliente_id) REFERENCES clients (id),
+                FOREIGN KEY (usuario_id) REFERENCES users (id)
+            )
+        """)
+        conn.commit()
+
         conn.close()

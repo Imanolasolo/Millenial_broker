@@ -72,6 +72,20 @@ def initialize_database():
                 role TEXT NOT NULL
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS polizas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_poliza TEXT UNIQUE NOT NULL,
+                cliente_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                tipo_poliza TEXT NOT NULL,
+                cobertura TEXT,
+                prima TEXT,
+                fecha_inicio TEXT NOT NULL,
+                fecha_fin TEXT NOT NULL,
+                estado TEXT NOT NULL
+            )
+        ''')
         # Add missing columns if they don't exist
         existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()]
         required_columns = {
@@ -114,7 +128,8 @@ def admin_dashboard():
         3. **Reportes**: Genera y visualiza reportes.
         4. **Configuración**: Ajusta el sistema.
         5. **Roles**: Gestiona los roles disponibles.
-        6. **Logout**: Cierra sesión.
+        6. **Pólizas**: Gestiona las pólizas de seguro.
+        7. **Logout**: Cierra sesión.
         """)
 
     st.markdown("""
@@ -144,6 +159,8 @@ def admin_dashboard():
         st.session_state["module"] = "Clientes"
     if st.sidebar.button("Roles"):
         st.session_state["module"] = "Roles"
+    if st.sidebar.button("Pólizas"):
+        st.session_state["module"] = "Pólizas"
     
     module = st.session_state["module"]
 
@@ -434,6 +451,127 @@ def admin_dashboard():
                     st.error("No se puede eliminar el rol asignado a usuarios.")
                 finally:
                     conn.close()
+
+    elif module == "Pólizas":
+        st.subheader("Gestión de Pólizas de Seguro")
+        operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
+
+        if operation == "Crear":
+            numero_poliza = st.text_input("Número de Póliza")
+
+            # Obtener lista de clientes
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
+            clientes = cursor.fetchall()
+            cursor.execute("SELECT id, username FROM users")
+            usuarios = cursor.fetchall()
+            conn.close()
+
+            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1])
+            usuario_seleccionado = st.selectbox("Selecciona un Usuario", usuarios, format_func=lambda x: x[1])
+
+            tipo_poliza = st.text_input("Tipo de Póliza")
+            cobertura = st.text_area("Cobertura")
+            prima = st.text_input("Prima")
+            fecha_inicio = st.date_input("Fecha de Inicio")
+            fecha_fin = st.date_input("Fecha de Fin")
+            estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
+
+            if st.button("Crear Póliza"):
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO polizas (numero_poliza, cliente_id, usuario_id, tipo_poliza, cobertura, prima, fecha_inicio, fecha_fin, estado)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (numero_poliza, cliente_seleccionado[0], usuario_seleccionado[0], tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado))
+                    conn.commit()
+                    st.success("Póliza creada exitosamente")
+                except sqlite3.IntegrityError:
+                    st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
+                finally:
+                    conn.close()
+
+        elif operation == "Leer":
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT p.id, p.numero_poliza, c.nombres || ' ' || c.apellidos AS cliente, 
+                       u.username AS usuario, p.tipo_poliza, p.cobertura, p.prima, 
+                       p.fecha_inicio, p.fecha_fin, p.estado
+                FROM polizas p
+                JOIN clients c ON p.cliente_id = c.id
+                JOIN users u ON p.usuario_id = u.id
+            """)
+            polizas = cursor.fetchall()
+            conn.close()
+
+            if polizas:
+                # Convertir los resultados en un DataFrame para una mejor visualización
+                import pandas as pd
+                df = pd.DataFrame(polizas, columns=[
+                    "ID", "Número de Póliza", "Cliente", "Usuario", "Tipo de Póliza", 
+                    "Cobertura", "Prima", "Fecha de Inicio", "Fecha de Fin", "Estado"
+                ])
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No hay pólizas registradas.")
+
+        elif operation == "Modificar":
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, numero_poliza FROM polizas")
+            polizas = cursor.fetchall()
+            conn.close()
+
+            selected_poliza = st.selectbox("Selecciona una póliza", polizas, format_func=lambda x: x[1])
+            if selected_poliza:
+                numero_poliza = st.text_input("Número de Póliza", value=selected_poliza[1])
+                tipo_poliza = st.text_input("Tipo de Póliza")
+                cobertura = st.text_area("Cobertura")
+                prima = st.text_input("Prima")
+                fecha_inicio = st.date_input("Fecha de Inicio")
+                fecha_fin = st.date_input("Fecha de Fin")
+                estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
+
+                if st.button("Actualizar Póliza"):
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""
+                            UPDATE polizas
+                            SET numero_poliza = ?, tipo_poliza = ?, cobertura = ?, prima = ?, fecha_inicio = ?, fecha_fin = ?, estado = ?
+                            WHERE id = ?
+                        """, (numero_poliza, tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado, selected_poliza[0]))
+                        conn.commit()
+                        st.success("Póliza actualizada exitosamente")
+                    except sqlite3.IntegrityError:
+                        st.error("Error al actualizar la póliza.")
+                    finally:
+                        conn.close()
+
+        elif operation == "Borrar":
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, numero_poliza FROM polizas")
+            polizas = cursor.fetchall()
+            conn.close()
+
+            selected_poliza = st.selectbox("Selecciona una póliza para eliminar", polizas, format_func=lambda x: x[1])
+
+            if st.button("Eliminar Póliza"):
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("DELETE FROM polizas WHERE id = ?", (selected_poliza[0],))
+                    conn.commit()
+                    st.success("Póliza eliminada exitosamente")
+                except sqlite3.IntegrityError:
+                    st.error("Error al eliminar la póliza.")
+                finally:
+                    conn.close()
+
     # Botón de Logout
     if st.sidebar.button("Logout"):
         del st.session_state["token"]  # Eliminar el token de la sesión

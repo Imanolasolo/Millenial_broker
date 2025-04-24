@@ -122,10 +122,12 @@ def main():
     if "token" in st.session_state:
         try:
             payload = jwt.decode(st.session_state["token"], SECRET_KEY, algorithms=["HS256"])
+            username = payload["username"]
             role = payload["role"]
             
-            if role == "admin":
-                admin_dashboard()  # Call the admin_dashboard directly for admin role
+            # Redirect to admin_dashboard if username is "admin" or role is "Administrador"
+            if username.lower() == "admin" or role.lower() == "administrador":
+                admin_dashboard()
             else:
                 # Dynamically construct the dashboard path
                 dashboard_path = os.path.join(os.path.dirname(__file__), "dashboards", f"{role}_dashboard.py")
@@ -134,8 +136,11 @@ def main():
                     spec = importlib.util.spec_from_file_location(f"{role}_dashboard", dashboard_path)
                     dashboard_module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(dashboard_module)
-                    dashboard_module.welcome_message()
-                    dashboard_module.manage_modules()
+                    # Call these methods only if they exist in the module
+                    if hasattr(dashboard_module, "welcome_message"):
+                        dashboard_module.welcome_message()
+                    if hasattr(dashboard_module, "manage_modules"):
+                        dashboard_module.manage_modules()
                 else:
                     st.error(f"No se encontró un dashboard para el rol: {role}. Contacte al administrador.")
         except jwt.ExpiredSignatureError:

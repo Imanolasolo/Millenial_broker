@@ -366,7 +366,8 @@ def admin_dashboard():
                     try:
                         cursor.execute("INSERT INTO roles (name) VALUES (?)", (role_name,))
                         conn.commit()
-                        create_dashboard(role_name)
+                        if role_name.lower() != "administrador":  # Skip dashboard creation for "Administrador"
+                            create_dashboard(role_name)
                         cursor.execute("INSERT INTO role_logs (role_name, action) VALUES (?, ?)", (role_name, "Creación"))
                         conn.commit()
                         st.success("Rol creado exitosamente")

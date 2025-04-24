@@ -142,10 +142,6 @@ def admin_dashboard():
         st.session_state["module"] = "Usuarios"
     if st.sidebar.button("Clientes"):
         st.session_state["module"] = "Clientes"
-    if st.sidebar.button("Reportes"):
-        st.session_state["module"] = "Reportes"
-    if st.sidebar.button("Configuración"):
-        st.session_state["module"] = "Configuración"
     if st.sidebar.button("Roles"):
         st.session_state["module"] = "Roles"
     

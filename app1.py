@@ -76,7 +76,8 @@ def authenticate(username, password):
         st.error("Estructura de usuario inválida en la base de datos. Contacte al administrador.")
         return None
     
-    if bcrypt.checkpw(password.encode(), user[2].encode()):
+    hashed_password = user[2].encode() if isinstance(user[2], str) else user[2]  # Ensure bytes type
+    if bcrypt.checkpw(password.encode(), hashed_password):  # Compare password correctly
         try:
             token = jwt.encode(
                 {

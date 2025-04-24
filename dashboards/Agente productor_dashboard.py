@@ -1,19 +1,14 @@
 # filepath: f:\CODECODIX\MILLENIAL_BROKER_project\dashboards\Agente Productor_dashboard.py
 # Dashboard para el rol: Agente Productor
 import streamlit as st
-
 def welcome_message():
-    st.markdown("### **Bienvenido al dashboard del rol: :red[Agente productor]**")  # Usar st.markdown para encabezado en negrita
-    
+    st.header("Bienvenido al dashboard del rol: :red[ Agente Productor ]")
+
 def manage_modules():
-    # Aqu√≠ se gestionar√°n los m√≥dulos necesarios para este rol
-    st.write("Gestionando m√≥dulos para el rol: Agente productor")
+    # AquÌ se gestionar·n los modulos necesarios para este rol
+    st.write("Gestionando modulos para el rol: Agente Productor")
 
     if st.button("Logout"):
-        del st.session_state["token"]  # Eliminar el token de la sesi√≥n
-        st.success("Sesi√≥n cerrada exitosamente")
-        st.rerun()  # Recargar la p√°gina para volver al login
-
-if __name__ == "__main__":
-    welcome_message()
-    manage_modules()
+        del st.session_state["token"]  # Eliminar el token de la sesiÛn
+        st.success("Sesion cerrada exitosamente")
+        st.rerun()  # Recargar la p·gina para volver al login

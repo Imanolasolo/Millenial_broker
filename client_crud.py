@@ -97,14 +97,16 @@ def update_client(email, **updates):
     finally:
         conn.close()
 
-# Update the delete_client function to delete by email
-def delete_client(email):
+# Update the delete_client function to delete by client ID
+def delete_client(client_id):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM clients WHERE correo_electronico=?", (email,))
+        cursor.execute("DELETE FROM clients WHERE id=?", (client_id,))
+        if cursor.rowcount == 0:
+            return f"No se encontró un cliente con ID '{client_id}'."
         conn.commit()
-        return f"Cliente con correo '{email}' borrado exitosamente."
+        return f"Cliente con ID '{client_id}' borrado exitosamente."
     except Exception as e:
         return f"Error al borrar el cliente: {e}"
     finally:

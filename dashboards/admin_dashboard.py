@@ -216,15 +216,40 @@ def admin_dashboard():
             conn.close()
 
             selected_user = st.selectbox("Selecciona un usuario", users)
-            new_password = st.text_input("Nueva Contraseña", type="password")
-            new_role = st.selectbox("Nuevo Rol", roles)
 
-            if st.button("Actualizar Usuario"):
-                if new_password and new_role:
-                    result = update_user(selected_user, new_password, new_role)
-                    st.success(result) if "exitosamente" in result else st.error(result)
-                else:
-                    st.error("Completa todos los campos.")
+            if selected_user:
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM users WHERE username = ?", (selected_user,))
+                user_data = cursor.fetchone()
+                conn.close()
+
+                if user_data:
+                    # Populate fields with existing user data
+                    username = st.text_input("Nombre de Usuario", value=user_data[1])
+                    new_password = st.text_input("Nueva Contraseña", type="password")
+                    correo = st.text_input("Correo Electrónico", value=user_data[4])
+                    nombres = st.text_input("Nombres", value=user_data[5])
+                    apellidos = st.text_input("Apellidos", value=user_data[6])
+                    telefono = st.text_input("Teléfono", value=user_data[7])
+                    role = st.selectbox("Rol", roles, index=roles.index(user_data[3]))
+
+                    if st.button("Actualizar Usuario"):
+                        if username and correo and nombres and apellidos and telefono and role:
+                            result = update_user(
+                                username=username,
+                                password=new_password if new_password else user_data[2],
+                                role=role,
+                                correo=correo,
+                                nombres=nombres,
+                                apellidos=apellidos,
+                                telefono=telefono,
+                                fecha_registro=user_data[8],
+                                ultima_actualizacion=st.date_input("Última Actualización").strftime("%Y-%m-%d")
+                            )
+                            st.success(result) if "exitosamente" in result else st.error(result)
+                        else:
+                            st.error("Completa todos los campos.")
 
         elif operation == "Borrar":
             st.subheader("Eliminar Usuario")

@@ -274,8 +274,18 @@ def admin_dashboard():
             nombres = st.text_input("Nombres")
             apellidos = st.text_input("Apellidos")
             razon_social = st.text_input("Razón Social") if tipo_cliente == "Empresa" else None
-            tipo_documento = st.selectbox("Tipo de Documento", ["DNI", "Pasaporte", "RUC"])
-            numero_documento = st.text_input("Número de Documento")
+            tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte", "RUC"])  # Cambiar "DNI" por "Cédula"
+
+            # Mostrar el campo de número de documento según el tipo seleccionado
+            if tipo_documento == "Cédula" or tipo_documento == "Pasaporte":
+                numero_documento = st.text_input(f"Número de {tipo_documento}")
+                if tipo_documento == "Cédula" and len(numero_documento) not in (0, 10):
+                    st.warning("El número de Cédula debe tener exactamente 10 dígitos.")
+            elif tipo_documento == "RUC":
+                numero_documento = st.text_input("Número de RUC")
+                if len(numero_documento) not in (0, 13):
+                    st.warning("El número de RUC debe tener exactamente 13 dígitos.")
+
             fecha_nacimiento = st.date_input("Fecha de Nacimiento")
             nacionalidad = st.text_input("Nacionalidad")
             sexo = st.selectbox("Sexo", ["Masculino", "Femenino", "Otro"])
@@ -299,7 +309,6 @@ def admin_dashboard():
             vehiculos_registrados = st.text_area("Vehículos Registrados")
             propiedades = st.text_area("Propiedades")
             tipo_contribuyente = st.text_input("Tipo de Contribuyente")
-            numero_ruc = st.text_input("Número RUC")
             representante_legal_id = st.text_input("ID Representante Legal")
             observaciones_legales = st.text_area("Observaciones Legales")
             canal_preferido_contacto = st.text_input("Canal Preferido de Contacto")
@@ -339,7 +348,6 @@ def admin_dashboard():
                         vehiculos_registrados=vehiculos_registrados,
                         propiedades=propiedades,
                         tipo_contribuyente=tipo_contribuyente,
-                        numero_ruc=numero_ruc,
                         representante_legal_id=representante_legal_id,
                         observaciones_legales=observaciones_legales,
                         canal_preferido_contacto=canal_preferido_contacto,

@@ -55,9 +55,21 @@ def create_client(**data):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM clients WHERE correo_electronico=?", (data['correo_electronico'],))
+        # Validar longitud del número de documento
+        if data['tipo_documento'].lower() == 'cedula' and len(data['numero_documento']) != 10:
+            return "El número de cédula debe tener exactamente 10 dígitos."
+        if data['tipo_documento'].lower() == 'ruc' and len(data['numero_documento']) != 13:
+            return "El número de RUC debe tener exactamente 13 dígitos."
+
+        # Verificar duplicados en nombres, apellidos, número de documento y correo electrónico
+        cursor.execute(
+            "SELECT * FROM clients WHERE nombres=? AND apellidos=? AND numero_documento=? AND correo_electronico=?",
+            (data['nombres'], data['apellidos'], data['numero_documento'], data['correo_electronico'])
+        )
         if cursor.fetchone():
-            return f"El cliente con correo '{data['correo_electronico']}' ya existe."
+            return f"El cliente con nombre '{data['nombres']} {data['apellidos']}', número de documento '{data['numero_documento']}' y correo '{data['correo_electronico']}' ya existe."
+
+        # Insertar cliente si no hay duplicados
         fields = ', '.join(data.keys())
         placeholders = ', '.join(['?'] * len(data))
         cursor.execute(f'''

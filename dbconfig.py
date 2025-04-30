@@ -105,4 +105,22 @@ def initialize_database():
         """)
         conn.commit()
 
+        # Crear tabla de empresas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                address TEXT,
+                phone TEXT,
+                email TEXT
+            )
+        """)
+        conn.commit()
+
+        # Agregar columna company_id a la tabla de usuarios si no existe
+        existing_columns = [col[1] for col in cursor.execute("PRAGMA table_info(users)").fetchall()]
+        if "company_id" not in existing_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN company_id INTEGER REFERENCES companies(id)")
+        conn.commit()
+
         conn.close()

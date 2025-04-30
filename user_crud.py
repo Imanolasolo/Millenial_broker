@@ -25,6 +25,8 @@ def initialize_users_table():
     existing_columns = [col[1] for col in cursor.execute("PRAGMA table_info(users)").fetchall()]
     if "correo" not in existing_columns:
         cursor.execute("ALTER TABLE users ADD COLUMN correo TEXT")
+    if "company_id" not in existing_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN company_id INTEGER")
     conn.commit()
     conn.close()
 
@@ -44,9 +46,9 @@ def create_user(**data):
         fields = ', '.join(data.keys())
         placeholders = ', '.join(['?'] * len(data))
         cursor.execute(f'''
-            INSERT INTO users ({fields})
-            VALUES ({placeholders})
-        ''', tuple(data.values()))
+            INSERT INTO users ({fields}, company_id)
+            VALUES ({placeholders}, ?)
+        ''', tuple(data.values()) + (data.get("company_id"),))
         conn.commit()
         return f"Usuario '{data['username']}' creado exitosamente."
     except Exception as e:
@@ -59,7 +61,11 @@ def read_users():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM users")
+        cursor.execute("""
+            SELECT u.*, c.name AS company_name
+            FROM users u
+            LEFT JOIN companies c ON u.company_id = c.id
+        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
     finally:
@@ -71,14 +77,24 @@ def update_user(username, **updates):
     cursor = conn.cursor()
     try:
         if "password" in updates:
-            updates["password"] = bcrypt.hashpw(updates["password"].encode('utf-8'), bcrypt.gensalt())
+            updates["password"] = (
+                bcrypt.hashpw(updates["password"].encode('utf-8'), bcrypt.gensalt())
+                if isinstance(updates["password"], str) and not updates["password"].startswith("$2b$")
+                else updates["password"]
+            )
 
+        # Construct the fields and values for the SQL query
         fields = ', '.join([f"{field}=?" for field in updates.keys()])
         values = list(updates.values()) + [username]
+
         cursor.execute(f'''
             UPDATE users SET {fields} WHERE username=?
         ''', values)
         conn.commit()
+
+        # Check if any rows were affected
+        if cursor.rowcount == 0:
+            return f"No se encontró el usuario '{username}' para actualizar."
         return f"Usuario '{username}' actualizado exitosamente."
     except Exception as e:
         return f"Error al actualizar el usuario: {e}"
@@ -103,3 +119,25 @@ def reset_user_table():
     if os.path.exists(DB_FILE):
         os.remove(DB_FILE)
     initialize_users_table()
+
+# Obtener detalles del usuario por username
+def get_user_details(username):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT u.username, u.nombres, u.apellidos, c.name AS company_name
+            FROM users u
+            LEFT JOIN companies c ON u.company_id = c.id
+            WHERE u.username = ?
+        """, (username,))
+        user = cursor.fetchone()
+        if user:
+            return {
+                "username": user[0],
+                "full_name": f"{user[1]} {user[2]}",
+                "company_name": user[3] or "Sin afiliación"
+            }
+        return None
+    finally:
+        conn.close()

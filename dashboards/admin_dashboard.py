@@ -1,7 +1,8 @@
 import streamlit as st
 import sqlite3
+import pandas as pd  # Ensure pandas is imported
 from dbconfig import DB_FILE
-from user_crud import create_user, read_users, update_user, delete_user
+from user_crud import create_user, read_users, update_user, delete_user, get_user_details
 from client_crud import create_client, read_clients, update_client, delete_client
 from create_dashboard import create_dashboard
 
@@ -69,7 +70,8 @@ def initialize_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
-                role TEXT NOT NULL
+                role TEXT NOT NULL,
+                company_id INTEGER
             )
         ''')
         cursor.execute('''
@@ -84,6 +86,31 @@ def initialize_database():
                 fecha_inicio TEXT NOT NULL,
                 fecha_fin TEXT NOT NULL,
                 estado TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                address TEXT,
+                phone TEXT,
+                email TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS aseguradoras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                direccion TEXT,
+                telefono TEXT,
+                email TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ramos_seguros (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
+                descripcion TEXT
             )
         ''')
         # Add missing columns if they don't exist
@@ -108,6 +135,15 @@ def initialize_database():
 initialize_database()
 
 def admin_dashboard():
+    # Retrieve username from session state
+    username = st.session_state.get("username")
+    user_details = get_user_details(username) if username else None
+
+    # Display header with avatar, name, and group
+    st.sidebar.image("avatar.png", width=100)  # Replace with the path to your avatar image
+    st.sidebar.markdown(f"**Usuario:** {user_details['full_name'] if user_details else 'Desconocido'}")
+    st.sidebar.markdown(f"**Afiliación:** {user_details['company_name'] if user_details else 'Sin afiliación'}")
+
     col1, col2 = st.columns([1, 4])
     with col1:
         st.image("logo.png", width=100)
@@ -129,7 +165,10 @@ def admin_dashboard():
         4. **Configuración**: Ajusta el sistema.
         5. **Roles**: Gestiona los roles disponibles.
         6. **Pólizas**: Gestiona las pólizas de seguro.
-        7. **Logout**: Cierra sesión.
+        7. **Agrupadores**: Gestiona los agrupadores.
+        8. **Aseguradoras**: Gestiona las aseguradoras.
+        9. **Ramos de Seguros**: Gestiona los ramos de seguros.
+        10. **Logout**: Cierra sesión.
         """)
 
     st.markdown("""
@@ -161,6 +200,12 @@ def admin_dashboard():
         st.session_state["module"] = "Roles"
     if st.sidebar.button("Pólizas"):
         st.session_state["module"] = "Pólizas"
+    if st.sidebar.button("Agrupadores"):  # Replace "Empresas" with "Agrupadores"
+        st.session_state["module"] = "Agrupadores"
+    if st.sidebar.button("Aseguradoras"):
+        st.session_state["module"] = "Aseguradoras"
+    if st.sidebar.button("Ramos de Seguros"):
+        st.session_state["module"] = "Ramos de Seguros"
     
     module = st.session_state["module"]
 
@@ -176,9 +221,15 @@ def admin_dashboard():
             apellidos = st.text_input("Apellidos")
             telefono = st.text_input("Teléfono")
             role = st.selectbox("Rol", [role[0] for role in sqlite3.connect(DB_FILE).cursor().execute("SELECT name FROM roles").fetchall()])
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name FROM companies")
+            companies = cursor.fetchall()
+            conn.close()
+            company_id = st.selectbox("Agrupador", companies, format_func=lambda x: x[1])  # Update label
 
             if st.button("Crear Usuario"):
-                if username and password and correo and nombres and apellidos and telefono and role:
+                if username and password and correo and nombres and apellidos and telefono and role and company_id:
                     result = create_user(
                         username=username,
                         password=password,
@@ -187,6 +238,7 @@ def admin_dashboard():
                         nombres=nombres,
                         apellidos=apellidos,
                         telefono=telefono,
+                        company_id=company_id[0],
                         fecha_registro=st.date_input("Fecha de Registro").strftime("%Y-%m-%d"),
                         ultima_actualizacion=st.date_input("Última Actualización").strftime("%Y-%m-%d")
                     )
@@ -213,6 +265,8 @@ def admin_dashboard():
             users = [user[0] for user in cursor.fetchall()]
             cursor.execute("SELECT name FROM roles")
             roles = [role[0] for role in cursor.fetchall()]
+            cursor.execute("SELECT id, name FROM companies")
+            companies = cursor.fetchall()
             conn.close()
 
             selected_user = st.selectbox("Selecciona un usuario", users)
@@ -233,17 +287,23 @@ def admin_dashboard():
                     apellidos = st.text_input("Apellidos", value=user_data[6])
                     telefono = st.text_input("Teléfono", value=user_data[7])
                     role = st.selectbox("Rol", roles, index=roles.index(user_data[3]))
+                    company_ids = [company[0] for company in companies]
+                    company_index = company_ids.index(user_data[8]) if user_data[8] in company_ids else 0
+                    company_id = st.selectbox("Agrupador", companies, format_func=lambda x: x[1], index=company_index)
 
                     if st.button("Actualizar Usuario"):
-                        if username and correo and nombres and apellidos and telefono and role:
+                        if username and correo and nombres and apellidos and telefono and role and company_id:
+                            password_to_store = new_password if new_password else user_data[2]
+
                             result = update_user(
                                 username=username,
-                                password=new_password if new_password else user_data[2],
+                                password=password_to_store,
                                 role=role,
                                 correo=correo,
                                 nombres=nombres,
                                 apellidos=apellidos,
                                 telefono=telefono,
+                                company_id=company_id[0],
                                 fecha_registro=user_data[8],
                                 ultima_actualizacion=st.date_input("Última Actualización").strftime("%Y-%m-%d")
                             )
@@ -604,6 +664,244 @@ def admin_dashboard():
                     st.error("Error al eliminar la póliza.")
                 finally:
                     conn.close()
+
+    elif module == "Agrupadores":  # Replace "Empresas" with "Agrupadores"
+        st.subheader("Gestión de Agrupadores")  # Update header
+        operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
+
+        if operation == "Crear":
+            name = st.text_input("Nombre del Agrupador")  # Update label
+            address = st.text_area("Dirección")
+            phone = st.text_input("Teléfono")
+            email = st.text_input("Correo Electrónico")
+            if st.button("Crear Agrupador"):  # Update button text
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO companies (name, address, phone, email)
+                        VALUES (?, ?, ?, ?)
+                    """, (name, address, phone, email))
+                    conn.commit()
+                    st.success("Agrupador creado exitosamente")  # Update success message
+                except sqlite3.IntegrityError:
+                    st.error("El nombre del agrupador ya existe.")  # Update error message
+                finally:
+                    conn.close()
+
+        elif operation == "Leer":
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, address, phone, email FROM companies")
+            columns = [col[0] for col in cursor.description]
+            agrupadores = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            conn.close()
+            if agrupadores:
+                st.dataframe(agrupadores, use_container_width=True)
+            else:
+                st.info("No hay agrupadores registrados.")
+
+        elif operation == "Modificar":
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name FROM companies")
+            agrupadores = cursor.fetchall()  # Update variable name
+            conn.close()
+            selected_agrupador = st.selectbox("Selecciona un agrupador", agrupadores, format_func=lambda x: x[1])
+            if selected_agrupador:
+                name = st.text_input("Nombre del Agrupador", value=selected_agrupador[1])  # Update label
+                address = st.text_area("Dirección")
+                phone = st.text_input("Teléfono")
+                email = st.text_input("Correo Electrónico")
+                if st.button("Actualizar Agrupador"):  # Update button text
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""
+                            UPDATE companies
+                            SET name = ?, address = ?, phone = ?, email = ?
+                            WHERE id = ?
+                        """, (name, address, phone, email, selected_agrupador[0]))
+                        conn.commit()
+                        st.success("Agrupador actualizado exitosamente")  # Update success message
+                    except sqlite3.IntegrityError:
+                        st.error("Error al actualizar el agrupador.")  # Update error message
+                    finally:
+                        conn.close()
+
+        elif operation == "Borrar":
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name FROM companies")
+            agrupadores = cursor.fetchall()  # Update variable name
+            conn.close()
+            selected_agrupador = st.selectbox("Selecciona un agrupador para eliminar", agrupadores, format_func=lambda x: x[1])
+            if st.button("Eliminar Agrupador"):  # Update button text
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("DELETE FROM companies WHERE id = ?", (selected_agrupador[0],))
+                    conn.commit()
+                    st.success("Agrupador eliminado exitosamente")  # Update success message
+                except sqlite3.IntegrityError:
+                    st.error("No se puede eliminar el agrupador asignado a usuarios.")  # Update error message
+                finally:
+                    conn.close()
+
+    elif module == "Aseguradoras":
+        st.subheader("Gestión de Aseguradoras")
+
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+
+        # Selector for CRUD operations
+        action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar"])
+
+        if action == "Crear":
+            st.subheader("Agregar Aseguradora")
+            with st.form("add_aseguradora"):
+                nombre = st.text_input("Nombre")
+                direccion = st.text_input("Dirección")
+                telefono = st.text_input("Teléfono")
+                email = st.text_input("Email")
+                if st.form_submit_button("Agregar"):
+                    try:
+                        cursor.execute("INSERT INTO aseguradoras (nombre, direccion, telefono, email) VALUES (?, ?, ?, ?)",
+                                       (nombre, direccion, telefono, email))
+                        conn.commit()
+                        st.success("Aseguradora agregada exitosamente.")
+                    except sqlite3.IntegrityError:
+                        st.error("El nombre de la aseguradora ya existe.")
+
+        elif action == "Leer":
+            st.subheader("Lista de Aseguradoras")
+            cursor.execute("SELECT * FROM aseguradoras")
+            aseguradoras = cursor.fetchall()
+            if aseguradoras:
+                for aseguradora in aseguradoras:
+                    st.write(f"ID: {aseguradora[0]}, Nombre: {aseguradora[1]}, Dirección: {aseguradora[2]}, Teléfono: {aseguradora[3]}, Email: {aseguradora[4]}")
+            else:
+                st.info("No hay aseguradoras registradas.")
+
+        elif action == "Actualizar":
+            st.subheader("Actualizar Aseguradora")
+            aseguradora_id = st.number_input("ID de la Aseguradora", min_value=1, step=1)
+            new_nombre = st.text_input("Nuevo Nombre")
+            new_direccion = st.text_input("Nueva Dirección")
+            new_telefono = st.text_input("Nuevo Teléfono")
+            new_email = st.text_input("Nuevo Email")
+            if st.button("Actualizar"):
+                cursor.execute("UPDATE aseguradoras SET nombre=?, direccion=?, telefono=?, email=? WHERE id=?",
+                               (new_nombre, new_direccion, new_telefono, new_email, aseguradora_id))
+                conn.commit()
+                st.success("Aseguradora actualizada exitosamente.")
+
+        elif action == "Eliminar":
+            st.subheader("Eliminar Aseguradora")
+            delete_id = st.number_input("ID de la Aseguradora a eliminar", min_value=1, step=1)
+            if st.button("Eliminar"):
+                cursor.execute("DELETE FROM aseguradoras WHERE id=?", (delete_id,))
+                conn.commit()
+                st.success("Aseguradora eliminada exitosamente.")
+
+        conn.close()
+
+    elif module == "Ramos de Seguros":
+        st.subheader("Gestión de Ramos de Seguros")
+
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+
+        # Selector for CRUD operations
+        action = st.selectbox("Seleccione una acción para Ramos de Seguros", ["Crear", "Leer", "Actualizar", "Eliminar"])
+
+        if action == "Crear":
+            st.subheader("Agregar Ramo de Seguro")
+            with st.form("add_ramo_seguro"):
+                nombre = st.text_input("Nombre")
+                descripcion = st.text_area("Descripción")
+                if st.form_submit_button("Agregar"):
+                    try:
+                        cursor.execute("INSERT INTO ramos_seguros (nombre, descripcion) VALUES (?, ?)",
+                                       (nombre, descripcion))
+                        conn.commit()
+                        st.success("Ramo de Seguro agregado exitosamente.")
+                    except sqlite3.IntegrityError:
+                        st.error("El nombre del ramo de seguro ya existe.")
+
+        elif action == "Leer":
+            st.subheader("Lista de Ramos de Seguros")
+            cursor.execute("SELECT id, nombre, descripcion FROM ramos_seguros")
+            ramos = cursor.fetchall()
+            if ramos:
+                # Convert the data into a DataFrame for better formatting
+                import pandas as pd
+                df = pd.DataFrame(ramos, columns=["ID", "Nombre", "Descripción"])
+                
+                # Apply CSS to enable both vertical and horizontal scrolling
+                st.markdown("""
+                <style>
+                .scrollable-table-container {
+                    max-height: 500px;
+                    max-width: 100%;
+                    overflow-y: auto;
+                    overflow-x: auto;
+                    border: 1px solid #ddd;
+                }
+                .scrollable-table-container table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .scrollable-table-container th, .scrollable-table-container td {
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                }
+                .scrollable-table-container td {
+                    white-space: pre-wrap; /* Enable text wrapping */
+                    word-wrap: break-word;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # Render the table with a scrollable container
+                st.markdown('<div class="scrollable-table-container">', unsafe_allow_html=True)
+                st.dataframe(df, use_container_width=True, height=500)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("No hay ramos de seguros registrados.")
+
+        elif action == "Actualizar":
+            st.subheader("Actualizar Ramo de Seguro")
+            cursor.execute("SELECT id, nombre FROM ramos_seguros")
+            ramos = cursor.fetchall()
+            selected_ramo = st.selectbox("Selecciona un Ramo de Seguro", ramos, format_func=lambda x: x[1])
+
+            if selected_ramo:
+                new_nombre = st.text_input("Nuevo Nombre", value=selected_ramo[1])
+                cursor.execute("SELECT descripcion FROM ramos_seguros WHERE id=?", (selected_ramo[0],))
+                current_descripcion = cursor.fetchone()[0]
+                new_descripcion = st.text_area("Nueva Descripción", value=current_descripcion)
+
+                if st.button("Actualizar"):
+                    cursor.execute("UPDATE ramos_seguros SET nombre=?, descripcion=? WHERE id=?",
+                                   (new_nombre, new_descripcion, selected_ramo[0]))
+                    conn.commit()
+                    st.success("Ramo de Seguro actualizado exitosamente.")
+
+        elif action == "Eliminar":
+            st.subheader("Eliminar Ramo de Seguro")
+            cursor.execute("SELECT id, nombre FROM ramos_seguros")
+            ramos = cursor.fetchall()
+            selected_ramo = st.selectbox("Selecciona un Ramo de Seguro para eliminar", ramos, format_func=lambda x: x[1])
+
+            if selected_ramo:
+                if st.button("Eliminar"):
+                    cursor.execute("DELETE FROM ramos_seguros WHERE id=?", (selected_ramo[0],))
+                    conn.commit()
+                    st.success("Ramo de Seguro eliminado exitosamente.")
+
+        conn.close()
 
     # Botón de Logout
     if st.sidebar.button("Logout"):

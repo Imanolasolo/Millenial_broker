@@ -9,12 +9,14 @@ import os
 from dashboards.admin_dashboard import admin_dashboard
 from dbconfig import DB_FILE, SECRET_KEY, initialize_database  # Import the function
 from user_dashboard import user_dashboard  # Import the refactored function
+from user_crud import initialize_users_table  # Import the function
 
 # Configuración inicial
 st.set_page_config(page_icon="logo.png", page_title="Millenial Broker", layout="wide")
 
 # Llamar a la función para inicializar la base de datos
 initialize_database()
+initialize_users_table()  # Ensure the users table is properly initialized
 
 # Function to encode image as base64 to set as background
 def get_base64_of_bin_file(bin_file):
@@ -56,6 +58,24 @@ def init_db():
         cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
                        ("admin", hashed_pw, "admin"))
         conn.commit()
+    
+    # Create Aseguradoras table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS aseguradoras (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        nombre TEXT UNIQUE,
+                        direccion TEXT,
+                        telefono TEXT,
+                        email TEXT
+                      )''')
+    conn.commit()
+    
+    # Create Ramos de Seguros table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS ramos_seguros (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        nombre TEXT UNIQUE,
+                        descripcion TEXT
+                      )''')
+    conn.commit()
     conn.close()
 
 # Función para autenticar usuarios
@@ -88,6 +108,8 @@ def authenticate(username, password):
                 SECRET_KEY,
                 algorithm="HS256"
             )
+            # Store username in session state
+            st.session_state["username"] = user[1]
         except Exception as e:
             st.error(f"Error al generar el token de autenticación: {e}")
             return None

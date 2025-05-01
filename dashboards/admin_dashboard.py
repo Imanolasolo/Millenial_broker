@@ -5,6 +5,7 @@ from dbconfig import DB_FILE
 from user_crud import create_user, read_users, update_user, delete_user, get_user_details
 from client_crud import create_client, read_clients, update_client, delete_client
 from create_dashboard import create_dashboard
+from aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
 
 def initialize_database():
     conn = sqlite3.connect(DB_FILE)
@@ -750,61 +751,79 @@ def admin_dashboard():
 
     elif module == "Aseguradoras":
         st.subheader("Gestión de Aseguradoras")
-
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-
-        # Selector for CRUD operations
         action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar"])
 
         if action == "Crear":
-            st.subheader("Agregar Aseguradora")
-            with st.form("add_aseguradora"):
-                nombre = st.text_input("Nombre")
-                direccion = st.text_input("Dirección")
-                telefono = st.text_input("Teléfono")
-                email = st.text_input("Email")
-                if st.form_submit_button("Agregar"):
-                    try:
-                        cursor.execute("INSERT INTO aseguradoras (nombre, direccion, telefono, email) VALUES (?, ?, ?, ?)",
-                                       (nombre, direccion, telefono, email))
-                        conn.commit()
-                        st.success("Aseguradora agregada exitosamente.")
-                    except sqlite3.IntegrityError:
-                        st.error("El nombre de la aseguradora ya existe.")
+            with st.form("crear_aseguradora"):
+                tipo_contribuyente = st.text_input("Tipo de Contribuyente")
+                tipo_identificacion = st.text_input("Tipo de Identificación")
+                identificacion = st.text_input("Identificación")
+                razon_social = st.text_input("Razón Social")
+                nombre_comercial = st.text_input("Nombre Comercial")
+                pais = st.text_input("País")
+                representante_legal = st.text_input("Representante Legal")
+                aniversario = st.date_input("Aniversario").strftime("%Y-%m-%d")
+                web = st.text_input("Web")
+                correo_electronico = st.text_input("Correo Electrónico")
+                if st.form_submit_button("Crear"):
+                    result = create_aseguradora((
+                        tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
+                        nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico
+                    ))
+                    st.success(result) if "exitosamente" in result else st.error(result)
 
         elif action == "Leer":
-            st.subheader("Lista de Aseguradoras")
-            cursor.execute("SELECT * FROM aseguradoras")
-            aseguradoras = cursor.fetchall()
+            aseguradoras = read_aseguradoras()
             if aseguradoras:
-                for aseguradora in aseguradoras:
-                    st.write(f"ID: {aseguradora[0]}, Nombre: {aseguradora[1]}, Dirección: {aseguradora[2]}, Teléfono: {aseguradora[3]}, Email: {aseguradora[4]}")
+                st.write("Lista de Aseguradoras:")
+                st.dataframe([{
+                    "ID": aseguradora[0],
+                    "Tipo de Contribuyente": aseguradora[1],
+                    "Tipo de Identificación": aseguradora[2],
+                    "Identificación": aseguradora[3],
+                    "Razón Social": aseguradora[4],
+                    "Nombre Comercial": aseguradora[5],
+                    "País": aseguradora[6],
+                    "Representante Legal": aseguradora[7],
+                    "Aniversario": aseguradora[8],
+                    "Web": aseguradora[9],
+                    "Correo Electrónico": aseguradora[10]
+                } for aseguradora in aseguradoras], use_container_width=True)
             else:
                 st.info("No hay aseguradoras registradas.")
 
         elif action == "Actualizar":
-            st.subheader("Actualizar Aseguradora")
-            aseguradora_id = st.number_input("ID de la Aseguradora", min_value=1, step=1)
-            new_nombre = st.text_input("Nuevo Nombre")
-            new_direccion = st.text_input("Nueva Dirección")
-            new_telefono = st.text_input("Nuevo Teléfono")
-            new_email = st.text_input("Nuevo Email")
-            if st.button("Actualizar"):
-                cursor.execute("UPDATE aseguradoras SET nombre=?, direccion=?, telefono=?, email=? WHERE id=?",
-                               (new_nombre, new_direccion, new_telefono, new_email, aseguradora_id))
-                conn.commit()
-                st.success("Aseguradora actualizada exitosamente.")
+            aseguradoras = read_aseguradoras()
+            aseguradora_ids = [aseguradora[0] for aseguradora in aseguradoras]
+            selected_id = st.selectbox("Seleccione una aseguradora", aseguradora_ids)
+            if selected_id:
+                aseguradora = next(a for a in aseguradoras if a[0] == selected_id)
+                with st.form("actualizar_aseguradora"):
+                    tipo_contribuyente = st.text_input("Tipo de Contribuyente", value=aseguradora[1])
+                    tipo_identificacion = st.text_input("Tipo de Identificación", value=aseguradora[2])
+                    identificacion = st.text_input("Identificación", value=aseguradora[3])
+                    razon_social = st.text_input("Razón Social", value=aseguradora[4])
+                    nombre_comercial = st.text_input("Nombre Comercial", value=aseguradora[5])
+                    pais = st.text_input("País", value=aseguradora[6])
+                    representante_legal = st.text_input("Representante Legal", value=aseguradora[7])
+                    aniversario = st.date_input("Aniversario", value=pd.to_datetime(aseguradora[8]))
+                    web = st.text_input("Web", value=aseguradora[9])
+                    correo_electronico = st.text_input("Correo Electrónico", value=aseguradora[10])
+                    if st.form_submit_button("Actualizar"):
+                        result = update_aseguradora(selected_id, (
+                            tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
+                            nombre_comercial, pais, representante_legal, aniversario.strftime("%Y-%m-%d"),
+                            web, correo_electronico
+                        ))
+                        st.success(result) if "exitosamente" in result else st.error(result)
 
         elif action == "Eliminar":
-            st.subheader("Eliminar Aseguradora")
-            delete_id = st.number_input("ID de la Aseguradora a eliminar", min_value=1, step=1)
+            aseguradoras = read_aseguradoras()
+            aseguradora_ids = [aseguradora[0] for aseguradora in aseguradoras]
+            selected_id = st.selectbox("Seleccione una aseguradora para eliminar", aseguradora_ids)
             if st.button("Eliminar"):
-                cursor.execute("DELETE FROM aseguradoras WHERE id=?", (delete_id,))
-                conn.commit()
-                st.success("Aseguradora eliminada exitosamente.")
-
-        conn.close()
+                result = delete_aseguradora(selected_id)
+                st.success(result) if "exitosamente" in result else st.error(result)
 
     elif module == "Ramos de Seguros":
         st.subheader("Gestión de Ramos de Seguros")

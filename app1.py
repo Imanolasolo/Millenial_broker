@@ -15,7 +15,7 @@ st.set_page_config(page_icon="logo.png", page_title="Millenial Broker", layout="
 
 initialize_users_table()
 
-# Function to encode image as base64 to set as background
+# Función para codificar imagen como base64
 def get_base64_of_bin_file(bin_file):
     try:
         with open(bin_file, 'rb') as f:
@@ -25,11 +25,10 @@ def get_base64_of_bin_file(bin_file):
         st.error(f"Error al leer el archivo '{bin_file}': {e}")
         return None
 
-# Encode the background image
+# Cargar imagen de fondo
 img_base64 = get_base64_of_bin_file('5134336.jpg')
 
 if img_base64:
-    # Set the background image using the encoded base64 string
     st.markdown(
         f"""
         <style>
@@ -42,12 +41,12 @@ if img_base64:
         unsafe_allow_html=True
     )
 
-# Crear la base de datos y tabla de usuarios
+# Inicializar la base de datos
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Crear tabla de usuarios
+    # Tabla de usuarios
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +55,8 @@ def init_db():
             role TEXT
         )
     ''')
-    # Verificar si el usuario admin existe, si no, crearlo
+
+    # Crear usuario admin por defecto
     cursor.execute("SELECT * FROM users WHERE username='admin'")
     if not cursor.fetchone():
         hashed_pw = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
@@ -64,7 +64,7 @@ def init_db():
                        ("admin", hashed_pw, "admin"))
         conn.commit()
 
-    # Crear tabla de aseguradoras
+    # Tabla aseguradoras
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS aseguradoras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,9 +74,8 @@ def init_db():
             email TEXT
         )
     ''')
-    conn.commit()
 
-    # Crear tabla de ramos de seguros
+    # Tabla ramos de seguros
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ramos_seguros (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,11 +83,11 @@ def init_db():
             descripcion TEXT
         )
     ''')
-    conn.commit()
 
+    conn.commit()
     conn.close()
 
-# Función para autenticar usuarios
+# Función para autenticar
 def authenticate(username, password):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -100,7 +99,8 @@ def authenticate(username, password):
         st.error("Usuario no encontrado.")
         return None
 
-    if bcrypt.checkpw(password.encode(), user[2].encode()):  # ✅ FIXED LINE
+    # ✅ user[2] es un string, lo convertimos a bytes para bcrypt
+    if bcrypt.checkpw(password.encode(), user[2].encode()):
         try:
             token = jwt.encode(
                 {
@@ -121,7 +121,7 @@ def authenticate(username, password):
     st.error("Contraseña incorrecta.")
     return None
 
-# Página de login y redirigir a dashboards
+# Página de login
 def login_page():
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -136,7 +136,7 @@ def login_page():
             st.success("Autenticación exitosa!")
             st.rerun()
 
-# Verificar sesión y redirigir a dashboards
+# Main
 def main():
     init_db()
     if "token" in st.session_state:
@@ -149,7 +149,7 @@ def main():
             else:
                 user_dashboard()
         except jwt.ExpiredSignatureError:
-            st.error("Sesión expirada, por favor inicie sesión nuevamente")
+            st.error("Sesión expirada, por favor inicie sesión nuevamente.")
             del st.session_state["token"]
             st.rerun()
     else:

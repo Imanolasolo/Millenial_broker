@@ -4,18 +4,14 @@ import jwt
 import datetime
 import bcrypt
 import base64
-import os
 from dashboards.admin_dashboard import admin_dashboard
+from dashboards.user_dashboard import user_dashboard
 from dbconfig import DB_FILE, SECRET_KEY, initialize_database
-from user_dashboard import user_dashboard
-from user_crud import initialize_users_table
 
-# Configuración inicial
+# Configurar la app
 st.set_page_config(page_icon="logo.png", page_title="Millenial Broker", layout="wide")
 
-initialize_users_table()
-
-# Función para codificar imagen como base64
+# Función para codificar imagen de fondo
 def get_base64_of_bin_file(bin_file):
     try:
         with open(bin_file, 'rb') as f:
@@ -25,9 +21,8 @@ def get_base64_of_bin_file(bin_file):
         st.error(f"Error al leer el archivo '{bin_file}': {e}")
         return None
 
-# Cargar imagen de fondo
+# Fondo
 img_base64 = get_base64_of_bin_file('5134336.jpg')
-
 if img_base64:
     st.markdown(
         f"""
@@ -41,12 +36,11 @@ if img_base64:
         unsafe_allow_html=True
     )
 
-# Inicializar la base de datos
+# Inicializar DB
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Tabla de usuarios
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +50,6 @@ def init_db():
         )
     ''')
 
-    # Crear usuario admin por defecto
     cursor.execute("SELECT * FROM users WHERE username='admin'")
     if not cursor.fetchone():
         hashed_pw = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
@@ -64,30 +57,9 @@ def init_db():
                        ("admin", hashed_pw, "admin"))
         conn.commit()
 
-    # Tabla aseguradoras
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS aseguradoras (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT UNIQUE,
-            direccion TEXT,
-            telefono TEXT,
-            email TEXT
-        )
-    ''')
-
-    # Tabla ramos de seguros
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS ramos_seguros (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT UNIQUE,
-            descripcion TEXT
-        )
-    ''')
-
-    conn.commit()
     conn.close()
 
-# Función para autenticar
+# Función de autenticación
 def authenticate(username, password):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -99,57 +71,51 @@ def authenticate(username, password):
         st.error("Usuario no encontrado.")
         return None
 
-    # ✅ user[2] es un string, lo convertimos a bytes para bcrypt
-    if bcrypt.checkpw(password.encode(), user[2].encode()):
-        try:
-            token = jwt.encode(
-                {
-                    "username": user[1],
-                    "role": user[3],
-                    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-                },
-                SECRET_KEY,
-                algorithm="HS256"
-            )
-            st.session_state["username"] = user[1]
-            st.session_state["token"] = token
-            return token
-        except Exception as e:
-            st.error(f"Error al generar el token: {e}")
-            return None
-
-    st.error("Contraseña incorrecta.")
-    return None
+    hashed_password = user[2]  # guardado como str (debe haber sido .decode() al guardar)
+    if bcrypt.checkpw(password.encode(), hashed_password.encode()):
+        token = jwt.encode(
+            {
+                "username": user[1],
+                "role": user[3],
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+            },
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+        st.session_state["token"] = token
+        return token
+    else:
+        st.error("Contraseña incorrecta.")
+        return None
 
 # Página de login
 def login_page():
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.image("logo.png", width=100)
-    with col2:
-        st.title("Iniciar Sesión")
+    st.image("logo.png", width=150)
+    st.title("Iniciar Sesión")
+
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
-    if st.button("Login"):
+
+    if st.button("Iniciar sesión"):
         token = authenticate(username, password)
         if token:
-            st.success("Autenticación exitosa!")
+            st.success("¡Bienvenido!")
             st.rerun()
 
-# Main
+# Lógica principal
 def main():
     init_db()
     if "token" in st.session_state:
         try:
             payload = jwt.decode(st.session_state["token"], SECRET_KEY, algorithms=["HS256"])
-            username = payload["username"]
-            role = payload["role"]
-            if role.lower() == "admin":
+            role = payload.get("role", "").lower()
+
+            if role == "admin":
                 admin_dashboard()
             else:
-                user_dashboard()
+                user_dashboard(role=role)
         except jwt.ExpiredSignatureError:
-            st.error("Sesión expirada, por favor inicie sesión nuevamente.")
+            st.error("Sesión expirada. Inicie sesión nuevamente.")
             del st.session_state["token"]
             st.rerun()
     else:

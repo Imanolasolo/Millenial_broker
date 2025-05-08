@@ -100,7 +100,10 @@ def authenticate(username, password):
         st.error("Usuario no encontrado.")
         return None
 
-    if bcrypt.checkpw(password.encode(), user[2]):  # Removed .encode() on user[2]
+    # Ensure the stored password is in bytes format
+    stored_password = user[2].encode() if isinstance(user[2], str) else user[2]
+
+    if bcrypt.checkpw(password.encode(), stored_password):
         try:
             token = jwt.encode(
                 {

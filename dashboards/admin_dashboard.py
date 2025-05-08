@@ -1,6 +1,5 @@
 import streamlit as st
 import sqlite3
-import pandas as pd  # Ensure pandas is imported
 from dbconfig import DB_FILE
 from user_crud import create_user, read_users, update_user, delete_user, get_user_details
 from client_crud import create_client, read_clients, update_client, delete_client
@@ -425,7 +424,7 @@ def admin_dashboard():
             clients = read_clients()
             if clients:
                 # Mostrar todos los campos de los clientes con barra horizontal
-                st.dataframe(clients, use_container_width=True)
+                st.write([client for client in clients])
             else:
                 st.info("No hay clientes registrados.")
 
@@ -602,13 +601,19 @@ def admin_dashboard():
             conn.close()
 
             if polizas:
-                # Convertir los resultados en un DataFrame para una mejor visualización
-                import pandas as pd
-                df = pd.DataFrame(polizas, columns=[
-                    "ID", "Número de Póliza", "Cliente", "Usuario", "Tipo de Póliza", 
-                    "Cobertura", "Prima", "Fecha de Inicio", "Fecha de Fin", "Estado"
-                ])
-                st.dataframe(df, use_container_width=True)
+                # Convertir los resultados en una lista para una mejor visualización
+                st.write([{
+                    "ID": poliza[0],
+                    "Número de Póliza": poliza[1],
+                    "Cliente": poliza[2],
+                    "Usuario": poliza[3],
+                    "Tipo de Póliza": poliza[4],
+                    "Cobertura": poliza[5],
+                    "Prima": poliza[6],
+                    "Fecha de Inicio": poliza[7],
+                    "Fecha de Fin": poliza[8],
+                    "Estado": poliza[9]
+                } for poliza in polizas])
             else:
                 st.info("No hay pólizas registradas.")
 
@@ -671,24 +676,26 @@ def admin_dashboard():
         operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
 
         if operation == "Crear":
-            name = st.text_input("Nombre del Agrupador")  # Update label
-            address = st.text_area("Dirección")
-            phone = st.text_input("Teléfono")
-            email = st.text_input("Correo Electrónico")
-            if st.button("Crear Agrupador"):  # Update button text
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                try:
-                    cursor.execute("""
-                        INSERT INTO companies (name, address, phone, email)
-                        VALUES (?, ?, ?, ?)
-                    """, (name, address, phone, email))
-                    conn.commit()
-                    st.success("Agrupador creado exitosamente")  # Update success message
-                except sqlite3.IntegrityError:
-                    st.error("El nombre del agrupador ya existe.")  # Update error message
-                finally:
-                    conn.close()
+            with st.form("crear_agrupador"):  # Wrap fields in a form
+                name = st.text_input("Nombre del Agrupador")  # Update label
+                address = st.text_area("Dirección")
+                phone = st.text_input("Teléfono")
+                email = st.text_input("Correo Electrónico")
+                submit_button = st.form_submit_button("Crear Agrupador")  # Add submit button
+                if submit_button:  # Check if the form is submitted
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""
+                            INSERT INTO companies (name, address, phone, email)
+                            VALUES (?, ?, ?, ?)
+                        """, (name, address, phone, email))
+                        conn.commit()
+                        st.success("Agrupador creado exitosamente")  # Update success message
+                    except sqlite3.IntegrityError:
+                        st.error("El nombre del agrupador ya existe.")  # Update error message
+                    finally:
+                        conn.close()
 
         elif operation == "Leer":
             conn = sqlite3.connect(DB_FILE)
@@ -698,7 +705,7 @@ def admin_dashboard():
             agrupadores = [dict(zip(columns, row)) for row in cursor.fetchall()]
             conn.close()
             if agrupadores:
-                st.dataframe(agrupadores, use_container_width=True)
+                st.write([agrupador for agrupador in agrupadores])
             else:
                 st.info("No hay agrupadores registrados.")
 
@@ -754,7 +761,7 @@ def admin_dashboard():
         action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar"])
 
         if action == "Crear":
-            with st.form("crear_aseguradora"):
+            with st.form("crear_aseguradora"):  # Wrap fields in a form
                 tipo_contribuyente = st.text_input("Tipo de Contribuyente")
                 tipo_identificacion = st.text_input("Tipo de Identificación")
                 identificacion = st.text_input("Identificación")
@@ -765,40 +772,74 @@ def admin_dashboard():
                 aniversario = st.date_input("Aniversario").strftime("%Y-%m-%d")
                 web = st.text_input("Web")
                 correo_electronico = st.text_input("Correo Electrónico")
-                if st.form_submit_button("Crear"):
-                    result = create_aseguradora((
-                        tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
-                        nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico
-                    ))
+                
+                # Fetch available Ramos de Seguros
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, nombre FROM ramos_seguros")
+                ramos = cursor.fetchall()
+                conn.close()
+                
+                ramo_ids = [ramo[0] for ramo in st.multiselect("Seleccione Ramos de Seguros", ramos, format_func=lambda x: x[1])]
+                
+                submit_button = st.form_submit_button("Crear Aseguradora")  # Add submit button
+                if submit_button:  # Check if the form is submitted
+                    aseguradora_data = (
+                        tipo_contribuyente,
+                        tipo_identificacion,
+                        identificacion,
+                        razon_social,
+                        nombre_comercial,
+                        pais,
+                        representante_legal,
+                        aniversario,
+                        web,
+                        correo_electronico
+                    )
+                    result = create_aseguradora(aseguradora_data, ramo_ids)  # Pass data and ramo_ids as separate arguments
                     st.success(result) if "exitosamente" in result else st.error(result)
 
         elif action == "Leer":
             aseguradoras = read_aseguradoras()
             if aseguradoras:
-                st.write("Lista de Aseguradoras:")
-                st.dataframe([{
-                    "ID": aseguradora[0],
-                    "Tipo de Contribuyente": aseguradora[1],
-                    "Tipo de Identificación": aseguradora[2],
-                    "Identificación": aseguradora[3],
-                    "Razón Social": aseguradora[4],
-                    "Nombre Comercial": aseguradora[5],
-                    "País": aseguradora[6],
-                    "Representante Legal": aseguradora[7],
-                    "Aniversario": aseguradora[8],
-                    "Web": aseguradora[9],
-                    "Correo Electrónico": aseguradora[10]
-                } for aseguradora in aseguradoras], use_container_width=True)
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                data = []
+                for aseguradora in aseguradoras:
+                    cursor.execute("""
+                        SELECT rs.nombre 
+                        FROM ramos_seguros rs
+                        JOIN aseguradora_ramos ar ON rs.id = ar.ramo_id
+                        WHERE ar.aseguradora_id = ?
+                    """, (aseguradora[0],))
+                    ramos = [ramo[0] for ramo in cursor.fetchall()]
+                    data.append({
+                        "ID": aseguradora[0],
+                        "Tipo de Contribuyente": aseguradora[1],
+                        "Tipo de Identificación": aseguradora[2],
+                        "Identificación": aseguradora[3],
+                        "Razón Social": aseguradora[4],
+                        "Nombre Comercial": aseguradora[5],
+                        "País": aseguradora[6],
+                        "Representante Legal": aseguradora[7],
+                        "Aniversario": aseguradora[8],
+                        "Web": aseguradora[9],
+                        "Correo Electrónico": aseguradora[10],
+                        "Ramos de Seguros": ", ".join(ramos)
+                    })
+                conn.close()
+                st.dataframe(data)  # Display data as a Streamlit dataframe
             else:
                 st.info("No hay aseguradoras registradas.")
 
         elif action == "Actualizar":
             aseguradoras = read_aseguradoras()
-            aseguradora_ids = [aseguradora[0] for aseguradora in aseguradoras]
-            selected_id = st.selectbox("Seleccione una aseguradora", aseguradora_ids)
-            if selected_id:
+            if aseguradoras:
+                aseguradora_names = {aseguradora[4]: aseguradora[0] for aseguradora in aseguradoras}  # Map name to ID
+                selected_name = st.selectbox("Seleccione una aseguradora", list(aseguradora_names.keys()))
+                selected_id = aseguradora_names[selected_name]
                 aseguradora = next(a for a in aseguradoras if a[0] == selected_id)
-                with st.form("actualizar_aseguradora"):
+                with st.form("actualizar_aseguradora"):  # Wrap fields in a form
                     tipo_contribuyente = st.text_input("Tipo de Contribuyente", value=aseguradora[1])
                     tipo_identificacion = st.text_input("Tipo de Identificación", value=aseguradora[2])
                     identificacion = st.text_input("Identificación", value=aseguradora[3])
@@ -806,24 +847,57 @@ def admin_dashboard():
                     nombre_comercial = st.text_input("Nombre Comercial", value=aseguradora[5])
                     pais = st.text_input("País", value=aseguradora[6])
                     representante_legal = st.text_input("Representante Legal", value=aseguradora[7])
-                    aniversario = st.date_input("Aniversario", value=pd.to_datetime(aseguradora[8]))
+                    aniversario = st.date_input(
+                        "Aniversario", 
+                        value=aseguradora[8] if aseguradora[8] else None  # Use raw string for date
+                    )
                     web = st.text_input("Web", value=aseguradora[9])
                     correo_electronico = st.text_input("Correo Electrónico", value=aseguradora[10])
-                    if st.form_submit_button("Actualizar"):
+                    
+                    # Fetch available Ramos de Seguros
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id, nombre FROM ramos_seguros")
+                    ramos = cursor.fetchall()
+                    
+                    # Fetch currently associated Ramos de Seguros
+                    cursor.execute("""
+                        SELECT ramo_id 
+                        FROM aseguradora_ramos 
+                        WHERE aseguradora_id = ?
+                    """, (selected_id,))
+                    current_ramo_ids = [row[0] for row in cursor.fetchall()]
+                    conn.close()
+                    
+                    ramo_ids = [ramo[0] for ramo in st.multiselect(
+                        "Seleccione Ramos de Seguros", 
+                        ramos, 
+                        default=[r for r in ramos if r[0] in current_ramo_ids],
+                        format_func=lambda x: x[1]
+                    )]
+                    
+                    submit_button = st.form_submit_button("Actualizar Aseguradora")  # Add submit button
+                    if submit_button:  # Check if the form is submitted
                         result = update_aseguradora(selected_id, (
                             tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
-                            nombre_comercial, pais, representante_legal, aniversario.strftime("%Y-%m-%d"),
+                            nombre_comercial, pais, representante_legal, aniversario.strftime("%Y-%m-%d") if aniversario else None,
                             web, correo_electronico
-                        ))
+                        ), ramo_ids)  # Pass ramo_ids as an argument
                         st.success(result) if "exitosamente" in result else st.error(result)
+            else:
+                st.info("No hay aseguradoras registradas.")
 
         elif action == "Eliminar":
             aseguradoras = read_aseguradoras()
-            aseguradora_ids = [aseguradora[0] for aseguradora in aseguradoras]
-            selected_id = st.selectbox("Seleccione una aseguradora para eliminar", aseguradora_ids)
-            if st.button("Eliminar"):
-                result = delete_aseguradora(selected_id)
-                st.success(result) if "exitosamente" in result else st.error(result)
+            if aseguradoras:
+                aseguradora_names = {aseguradora[4]: aseguradora[0] for aseguradora in aseguradoras}  # Map name to ID
+                selected_name = st.selectbox("Seleccione una aseguradora para eliminar", list(aseguradora_names.keys()))
+                if st.button("Eliminar"):
+                    selected_id = aseguradora_names[selected_name]
+                    result = delete_aseguradora(selected_id)
+                    st.success(result) if "exitosamente" in result else st.error(result)
+            else:
+                st.info("No hay aseguradoras registradas.")
 
     elif module == "Ramos de Seguros":
         st.subheader("Gestión de Ramos de Seguros")
@@ -853,40 +927,12 @@ def admin_dashboard():
             cursor.execute("SELECT id, nombre, descripcion FROM ramos_seguros")
             ramos = cursor.fetchall()
             if ramos:
-                # Convert the data into a DataFrame for better formatting
-                import pandas as pd
-                df = pd.DataFrame(ramos, columns=["ID", "Nombre", "Descripción"])
-                
-                # Apply CSS to enable both vertical and horizontal scrolling
-                st.markdown("""
-                <style>
-                .scrollable-table-container {
-                    max-height: 500px;
-                    max-width: 100%;
-                    overflow-y: auto;
-                    overflow-x: auto;
-                    border: 1px solid #ddd;
-                }
-                .scrollable-table-container table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                .scrollable-table-container th, .scrollable-table-container td {
-                    border: 1px solid #ddd;
-                    padding: 8px;
-                    text-align: left;
-                }
-                .scrollable-table-container td {
-                    white-space: pre-wrap; /* Enable text wrapping */
-                    word-wrap: break-word;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
-                # Render the table with a scrollable container
-                st.markdown('<div class="scrollable-table-container">', unsafe_allow_html=True)
-                st.dataframe(df, use_container_width=True, height=500)
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Convert the data into a list for better formatting
+                st.write([{
+                    "ID": ramo[0],
+                    "Nombre": ramo[1],
+                    "Descripción": ramo[2]
+                } for ramo in ramos])
             else:
                 st.info("No hay ramos de seguros registrados.")
 

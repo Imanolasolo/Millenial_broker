@@ -138,6 +138,18 @@ def initialize_database():
     ''')
     print("Companies table ensured.")
 
+    # Create aseguradora_ramos table if it doesn't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS aseguradora_ramos (
+            aseguradora_id INTEGER NOT NULL,
+            ramo_id INTEGER NOT NULL,
+            PRIMARY KEY (aseguradora_id, ramo_id),
+            FOREIGN KEY (aseguradora_id) REFERENCES aseguradoras (id),
+            FOREIGN KEY (ramo_id) REFERENCES ramos_seguros (id)
+        )
+    ''')
+    print("Aseguradora-Ramos table ensured.")
+
     conn.commit()
     conn.close()
     print("Database initialization complete.")

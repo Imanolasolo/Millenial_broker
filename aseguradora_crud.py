@@ -1,7 +1,7 @@
 import sqlite3
 from dbconfig import DB_FILE
 
-def create_aseguradora(data):
+def create_aseguradora(data, ramo_ids):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
@@ -11,6 +11,9 @@ def create_aseguradora(data):
                 nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', data)
+        aseguradora_id = cursor.lastrowid
+        for ramo_id in ramo_ids:
+            cursor.execute('INSERT INTO aseguradora_ramos (aseguradora_id, ramo_id) VALUES (?, ?)', (aseguradora_id, ramo_id))
         conn.commit()
         return "Aseguradora creada exitosamente."
     except sqlite3.IntegrityError:
@@ -26,7 +29,7 @@ def read_aseguradoras():
     conn.close()
     return rows
 
-def update_aseguradora(id, data):
+def update_aseguradora(id, data, ramo_ids):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
@@ -36,6 +39,9 @@ def update_aseguradora(id, data):
                 nombre_comercial=?, pais=?, representante_legal=?, aniversario=?, web=?, correo_electronico=?
             WHERE id=?
         ''', (*data, id))
+        cursor.execute('DELETE FROM aseguradora_ramos WHERE aseguradora_id=?', (id,))
+        for ramo_id in ramo_ids:
+            cursor.execute('INSERT INTO aseguradora_ramos (aseguradora_id, ramo_id) VALUES (?, ?)', (id, ramo_id))
         conn.commit()
         return "Aseguradora actualizada exitosamente."
     except sqlite3.IntegrityError:

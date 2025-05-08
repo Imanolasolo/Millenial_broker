@@ -100,7 +100,7 @@ def authenticate(username, password):
         st.error("Usuario no encontrado.")
         return None
 
-    if bcrypt.checkpw(password.encode(), user[2]):  # Removed .encode() on user[2]
+    if bcrypt.checkpw(password.encode(), user[2].encode()):  # ✅ FIXED LINE
         try:
             token = jwt.encode(
                 {

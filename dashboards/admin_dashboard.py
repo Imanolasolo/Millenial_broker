@@ -80,14 +80,40 @@ def initialize_database():
                 numero_poliza TEXT UNIQUE NOT NULL,
                 cliente_id INTEGER NOT NULL,
                 usuario_id INTEGER NOT NULL,
+                aseguradora_id INTEGER NOT NULL,
+                ramo_id INTEGER NOT NULL,
                 tipo_poliza TEXT NOT NULL,
                 cobertura TEXT,
                 prima TEXT,
                 fecha_inicio TEXT NOT NULL,
                 fecha_fin TEXT NOT NULL,
-                estado TEXT NOT NULL
+                estado TEXT NOT NULL,
+                vigencia TEXT,
+                suma_asegurada TEXT,
+                deducible TEXT,
+                tipo_riesgo TEXT,
+                sucursal TEXT,
+                tipo_facturacion TEXT
             )
         ''')
+        # Add missing columns if they don't exist
+        existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
+        if "vigencia" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN vigencia TEXT")
+        if "suma_asegurada" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN suma_asegurada TEXT")
+        if "deducible" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN deducible TEXT")
+        if "tipo_riesgo" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN tipo_riesgo TEXT")
+        if "sucursal" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN sucursal TEXT")
+        if "tipo_facturacion" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN tipo_facturacion TEXT")
+        if "aseguradora_id" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN aseguradora_id INTEGER")
+        if "ramo_id" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN ramo_id INTEGER")
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS companies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -423,8 +449,10 @@ def admin_dashboard():
             st.subheader("Lista de Clientes")
             clients = read_clients()
             if clients:
-                # Mostrar todos los campos de los clientes con barra horizontal
-                st.write([client for client in clients])
+                # Convertir los datos a un DataFrame de Streamlit
+                import pandas as pd
+                df = pd.DataFrame(clients)
+                st.dataframe(df)  # Mostrar como tabla interactiva
             else:
                 st.info("No hay clientes registrados.")
 
@@ -559,10 +587,16 @@ def admin_dashboard():
             clientes = cursor.fetchall()
             cursor.execute("SELECT id, username FROM users")
             usuarios = cursor.fetchall()
+            cursor.execute("SELECT id, razon_social FROM aseguradoras")  # Fetch aseguradoras
+            aseguradoras = cursor.fetchall()
+            cursor.execute("SELECT id, nombre FROM ramos_seguros")  # Fetch ramos_seguros
+            ramos_seguros = cursor.fetchall()
             conn.close()
 
             cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1])
             usuario_seleccionado = st.selectbox("Selecciona un Usuario", usuarios, format_func=lambda x: x[1])
+            aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1])  # Selección de aseguradora
+            ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1])  # Add ramo_seguros selection
 
             tipo_poliza = st.text_input("Tipo de Póliza")
             cobertura = st.text_area("Cobertura")
@@ -570,15 +604,21 @@ def admin_dashboard():
             fecha_inicio = st.date_input("Fecha de Inicio")
             fecha_fin = st.date_input("Fecha de Fin")
             estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
+            vigencia = st.text_input("Vigencia")  # Add vigencia field
+            suma_asegurada = st.text_input("Suma Asegurada")  # Add suma_asegurada field
+            deducible = st.text_input("Deducible")  # Add deducible field
+            tipo_riesgo = st.text_input("Tipo de Riesgo")  # Add tipo_riesgo field
+            sucursal = st.text_input("Sucursal")  # Add sucursal field
+            tipo_facturacion = st.text_input("Tipo de Facturación")  # Add tipo_facturacion field
 
             if st.button("Crear Póliza"):
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
                 try:
                     cursor.execute("""
-                        INSERT INTO polizas (numero_poliza, cliente_id, usuario_id, tipo_poliza, cobertura, prima, fecha_inicio, fecha_fin, estado)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (numero_poliza, cliente_seleccionado[0], usuario_seleccionado[0], tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado))
+                        INSERT INTO polizas (numero_poliza, cliente_id, usuario_id, aseguradora_id, ramo_id, tipo_poliza, cobertura, prima, fecha_inicio, fecha_fin, estado, vigencia, suma_asegurada, deducible, tipo_riesgo, sucursal, tipo_facturacion)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (numero_poliza, cliente_seleccionado[0], usuario_seleccionado[0], aseguradora_seleccionada[0], ramo_seleccionado[0], tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado, vigencia, suma_asegurada, deducible, tipo_riesgo, sucursal, tipo_facturacion))
                     conn.commit()
                     st.success("Póliza creada exitosamente")
                 except sqlite3.IntegrityError:
@@ -592,10 +632,14 @@ def admin_dashboard():
             cursor.execute("""
                 SELECT p.id, p.numero_poliza, c.nombres || ' ' || c.apellidos AS cliente, 
                        u.username AS usuario, p.tipo_poliza, p.cobertura, p.prima, 
-                       p.fecha_inicio, p.fecha_fin, p.estado
+                       p.fecha_inicio, p.fecha_fin, p.estado, p.vigencia, p.suma_asegurada, 
+                       p.deducible, p.tipo_riesgo, p.sucursal, p.tipo_facturacion, 
+                       a.razon_social AS aseguradora, r.nombre AS ramo
                 FROM polizas p
                 JOIN clients c ON p.cliente_id = c.id
                 JOIN users u ON p.usuario_id = u.id
+                JOIN aseguradoras a ON p.aseguradora_id = a.id
+                JOIN ramos_seguros r ON p.ramo_id = r.id
             """)
             polizas = cursor.fetchall()
             conn.close()
@@ -612,7 +656,15 @@ def admin_dashboard():
                     "Prima": poliza[6],
                     "Fecha de Inicio": poliza[7],
                     "Fecha de Fin": poliza[8],
-                    "Estado": poliza[9]
+                    "Estado": poliza[9],
+                    "Vigencia": poliza[10],
+                    "Suma Asegurada": poliza[11],
+                    "Deducible": poliza[12],
+                    "Tipo de Riesgo": poliza[13],
+                    "Sucursal": poliza[14],
+                    "Tipo de Facturación": poliza[15],
+                    "Aseguradora": poliza[16],
+                    "Ramo": poliza[17]
                 } for poliza in polizas])
             else:
                 st.info("No hay pólizas registradas.")
@@ -620,19 +672,53 @@ def admin_dashboard():
         elif operation == "Modificar":
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
-            cursor.execute("SELECT id, numero_poliza FROM polizas")
+            cursor.execute("""
+                SELECT p.id, p.numero_poliza, p.tipo_poliza, p.cobertura, p.prima, 
+                       p.fecha_inicio, p.fecha_fin, p.estado, p.aseguradora_id, p.ramo_id, 
+                       p.vigencia, p.suma_asegurada, p.deducible, p.tipo_riesgo, 
+                       p.sucursal, p.tipo_facturacion
+                FROM polizas p
+            """)
             polizas = cursor.fetchall()
+            cursor.execute("SELECT id, razon_social FROM aseguradoras")
+            aseguradoras = cursor.fetchall()
+            cursor.execute("SELECT id, nombre FROM ramos_seguros")
+            ramos_seguros = cursor.fetchall()
             conn.close()
+
+            if not polizas:
+                st.warning("No hay pólizas registradas.")
+                return
 
             selected_poliza = st.selectbox("Selecciona una póliza", polizas, format_func=lambda x: x[1])
             if selected_poliza:
+                # Validar que selected_poliza tenga suficientes elementos
+                if len(selected_poliza) < 16:
+                    st.error("Error: Los datos de la póliza seleccionada están incompletos.")
+                    return
+
                 numero_poliza = st.text_input("Número de Póliza", value=selected_poliza[1])
-                tipo_poliza = st.text_input("Tipo de Póliza")
-                cobertura = st.text_area("Cobertura")
-                prima = st.text_input("Prima")
-                fecha_inicio = st.date_input("Fecha de Inicio")
-                fecha_fin = st.date_input("Fecha de Fin")
-                estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
+                tipo_poliza = st.text_input("Tipo de Póliza", value=selected_poliza[2])
+                cobertura = st.text_area("Cobertura", value=selected_poliza[3])
+                prima = st.text_input("Prima", value=selected_poliza[4])
+                fecha_inicio = st.date_input("Fecha de Inicio", value=selected_poliza[5])
+                fecha_fin = st.date_input("Fecha de Fin", value=selected_poliza[6])
+                estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"], index=["Activa", "Inactiva", "Cancelada"].index(selected_poliza[7]))
+
+                # Manejar el índice de la aseguradora seleccionada
+                aseguradora_index = next((i for i, aseguradora in enumerate(aseguradoras) if aseguradora[0] == selected_poliza[8]), 0)
+                aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1], index=aseguradora_index)
+
+                # Manejar el índice del ramo seleccionado
+                ramo_index = next((i for i, ramo in enumerate(ramos_seguros) if ramo[0] == selected_poliza[9]), 0)
+                ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1], index=ramo_index)
+
+                vigencia = st.text_input("Vigencia", value=selected_poliza[10])
+                suma_asegurada = st.text_input("Suma Asegurada", value=selected_poliza[11])
+                deducible = st.text_input("Deducible", value=selected_poliza[12])
+                tipo_riesgo = st.text_input("Tipo de Riesgo", value=selected_poliza[13])
+                sucursal = st.text_input("Sucursal", value=selected_poliza[14])
+                tipo_facturacion = st.text_input("Tipo de Facturación", value=selected_poliza[15])
 
                 if st.button("Actualizar Póliza"):
                     conn = sqlite3.connect(DB_FILE)
@@ -640,9 +726,12 @@ def admin_dashboard():
                     try:
                         cursor.execute("""
                             UPDATE polizas
-                            SET numero_poliza = ?, tipo_poliza = ?, cobertura = ?, prima = ?, fecha_inicio = ?, fecha_fin = ?, estado = ?
+                            SET numero_poliza = ?, tipo_poliza = ?, cobertura = ?, prima = ?, 
+                                fecha_inicio = ?, fecha_fin = ?, estado = ?, aseguradora_id = ?, 
+                                ramo_id = ?, vigencia = ?, suma_asegurada = ?, deducible = ?, 
+                                tipo_riesgo = ?, sucursal = ?, tipo_facturacion = ?
                             WHERE id = ?
-                        """, (numero_poliza, tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado, selected_poliza[0]))
+                        """, (numero_poliza, tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado, aseguradora_seleccionada[0], ramo_seleccionado[0], vigencia, suma_asegurada, deducible, tipo_riesgo, sucursal, tipo_facturacion, selected_poliza[0]))
                         conn.commit()
                         st.success("Póliza actualizada exitosamente")
                     except sqlite3.IntegrityError:
@@ -705,7 +794,10 @@ def admin_dashboard():
             agrupadores = [dict(zip(columns, row)) for row in cursor.fetchall()]
             conn.close()
             if agrupadores:
-                st.write([agrupador for agrupador in agrupadores])
+                # Convertir los datos a un DataFrame de Streamlit
+                import pandas as pd
+                df = pd.DataFrame(agrupadores)
+                st.dataframe(df)  # Mostrar como tabla interactiva
             else:
                 st.info("No hay agrupadores registrados.")
 
@@ -924,15 +1016,17 @@ def admin_dashboard():
 
         elif action == "Leer":
             st.subheader("Lista de Ramos de Seguros")
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
             cursor.execute("SELECT id, nombre, descripcion FROM ramos_seguros")
-            ramos = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            ramos = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            conn.close()
             if ramos:
-                # Convert the data into a list for better formatting
-                st.write([{
-                    "ID": ramo[0],
-                    "Nombre": ramo[1],
-                    "Descripción": ramo[2]
-                } for ramo in ramos])
+                # Convertir los datos a un DataFrame de Streamlit
+                import pandas as pd
+                df = pd.DataFrame(ramos)
+                st.dataframe(df)  # Mostrar como tabla interactiva
             else:
                 st.info("No hay ramos de seguros registrados.")
 

@@ -85,9 +85,14 @@ def initialize_database():
                 prima TEXT,
                 fecha_inicio TEXT NOT NULL,
                 fecha_fin TEXT NOT NULL,
-                estado TEXT NOT NULL
+                estado TEXT NOT NULL,
+                ejecutivo_comercial_id INTEGER
             )
         ''')
+        # Añadir columna si no existe
+        existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
+        if "ejecutivo_comercial_id" not in existing_columns:
+            cursor.execute("ALTER TABLE polizas ADD COLUMN ejecutivo_comercial_id INTEGER")
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS companies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -552,35 +557,87 @@ def admin_dashboard():
         if operation == "Crear":
             numero_poliza = st.text_input("Número de Póliza")
 
-            # Obtener lista de clientes
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
             clientes = cursor.fetchall()
             cursor.execute("SELECT id, username FROM users")
             usuarios = cursor.fetchall()
+            cursor.execute("SELECT id, razon_social FROM aseguradoras")
+            aseguradoras = cursor.fetchall()
+            cursor.execute("SELECT id, nombre FROM ramos_seguros")
+            ramos_seguros = cursor.fetchall()
+            # Obtener ejecutivos comerciales (asegúrate de que este campo existe en la base de datos)
+            cursor.execute("SELECT id, username FROM users WHERE lower(role) IN ('ejecutivo comercial', 'ejecutivo_comercial', 'ejecutivocomercial', 'seller')")
+            ejecutivos_comerciales = cursor.fetchall()
             conn.close()
 
-            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1])
-            usuario_seleccionado = st.selectbox("Selecciona un Usuario", usuarios, format_func=lambda x: x[1])
+            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1], key="cliente_poliza")
+            usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=lambda x: x[1], key="gestor_poliza")
+            aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1], key="aseguradora_poliza")
+            ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1], key="ramo_poliza")
+            ejecutivo_comercial_seleccionado = st.selectbox(
+                "Selecciona un Ejecutivo Comercial",
+                ejecutivos_comerciales,
+                format_func=lambda x: x[1],
+                key="ejecutivo_comercial_poliza"
+            )
+            tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"], key="tipo_poliza")
+            cobertura = st.text_area("Cobertura", key="cobertura_poliza")
+            prima = st.text_input("Prima", key="prima_poliza")
+            fecha_inicio_vigencia = st.date_input("Fecha de Inicio Vigencia", key="fecha_inicio_poliza")
+            fecha_fin_vigencia = st.date_input("Fecha de Fin Vigencia", key="fecha_fin_poliza")
+            estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"], key="estado_poliza")
+            fecha_emision = st.date_input("Fecha de emisión", key="fecha_emision_poliza")
+            linea_negocio = st.text_input("Línea de negocio", key="linea_negocio_poliza")
+            suma_asegurada = st.text_input("Suma Asegurada", key="suma_asegurada_poliza")
+            deducible = st.text_input("Deducible", key="deducible_poliza")
+            sucursal = st.text_input("Sucursal", key="sucursal_poliza")
+            tipo_facturacion = st.selectbox("Tipo de Facturación", ["Contado", "Débito", "Cuota Directa"], key="tipo_facturacion_poliza")
+            numero_factura = st.text_input("Nº de factura", key="numero_factura_poliza")
+            numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)", key="numero_anexo_poliza")
+            tipo_anexo = st.text_input("Tipo de anexo", key="tipo_anexo_poliza")
 
-            tipo_poliza = st.text_input("Tipo de Póliza")
-            cobertura = st.text_area("Cobertura")
-            prima = st.text_input("Prima")
-            fecha_inicio = st.date_input("Fecha de Inicio")
-            fecha_fin = st.date_input("Fecha de Fin")
-            estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
-
-            if st.button("Crear Póliza"):
+            if st.button("Crear Póliza", key="crear_poliza_btn"):
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
+                existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
+                if "ejecutivo_comercial_id" not in existing_columns:
+                    cursor.execute("ALTER TABLE polizas ADD COLUMN ejecutivo_comercial_id INTEGER")
                 try:
                     cursor.execute("""
-                        INSERT INTO polizas (numero_poliza, cliente_id, usuario_id, tipo_poliza, cobertura, prima, fecha_inicio, fecha_fin, estado)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (numero_poliza, cliente_seleccionado[0], usuario_seleccionado[0], tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado))
+                        INSERT INTO polizas (
+                            numero_poliza, cliente_id, usuario_id, aseguradora_id, ramo_id, tipo_poliza, cobertura, prima,
+                            fecha_inicio, fecha_fin, estado, fecha_emision, suma_asegurada, deducible, sucursal,
+                            tipo_facturacion, linea_negocio, numero_factura, numero_anexo, tipo_anexo, ejecutivo_comercial_id
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        numero_poliza,
+                        cliente_seleccionado[0],
+                        usuario_seleccionado[0],
+                        aseguradora_seleccionada[0],
+                        ramo_seleccionado[0],
+                        tipo_poliza,
+                        cobertura,
+                        prima,
+                        fecha_inicio_vigencia.strftime("%Y-%m-%d"),
+                        fecha_fin_vigencia.strftime("%Y-%m-%d"),
+                        estado,
+                        fecha_emision.strftime("%Y-%m-%d"),
+                        suma_asegurada,
+                        deducible,
+                        sucursal,
+                        tipo_facturacion,
+                        linea_negocio,
+                        numero_factura,
+                        numero_anexo,
+                        tipo_anexo,
+                        ejecutivo_comercial_seleccionado[0] if ejecutivo_comercial_seleccionado else None
+                    ))
                     conn.commit()
                     st.success("Póliza creada exitosamente")
+                    st.experimental_rerun()
                 except sqlite3.IntegrityError:
                     st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
                 finally:
@@ -592,7 +649,8 @@ def admin_dashboard():
             cursor.execute("""
                 SELECT p.id, p.numero_poliza, c.nombres || ' ' || c.apellidos AS cliente, 
                        u.username AS usuario, p.tipo_poliza, p.cobertura, p.prima, 
-                       p.fecha_inicio, p.fecha_fin, p.estado
+                       p.fecha_inicio, p.fecha_fin, p.estado, 
+                       (SELECT username FROM users WHERE id = p.ejecutivo_comercial_id) AS ejecutivo_comercial
                 FROM polizas p
                 JOIN clients c ON p.cliente_id = c.id
                 JOIN users u ON p.usuario_id = u.id
@@ -601,7 +659,6 @@ def admin_dashboard():
             conn.close()
 
             if polizas:
-                # Convertir los resultados en una lista para una mejor visualización
                 st.write([{
                     "ID": poliza[0],
                     "Número de Póliza": poliza[1],
@@ -612,7 +669,8 @@ def admin_dashboard():
                     "Prima": poliza[6],
                     "Fecha de Inicio": poliza[7],
                     "Fecha de Fin": poliza[8],
-                    "Estado": poliza[9]
+                    "Estado": poliza[9],
+                    "Ejecutivo Comercial": poliza[10]
                 } for poliza in polizas])
             else:
                 st.info("No hay pólizas registradas.")
@@ -622,17 +680,33 @@ def admin_dashboard():
             cursor = conn.cursor()
             cursor.execute("SELECT id, numero_poliza FROM polizas")
             polizas = cursor.fetchall()
+            cursor.execute("SELECT id, username FROM users")
+            usuarios = cursor.fetchall()
+            cursor.execute("SELECT id, username FROM users WHERE lower(role) IN ('ejecutivo comercial', 'ejecutivo_comercial', 'ejecutivocomercial', 'seller')")
+            ejecutivos_comerciales = cursor.fetchall()
             conn.close()
 
             selected_poliza = st.selectbox("Selecciona una póliza", polizas, format_func=lambda x: x[1])
             if selected_poliza:
-                numero_poliza = st.text_input("Número de Póliza", value=selected_poliza[1])
-                tipo_poliza = st.text_input("Tipo de Póliza")
-                cobertura = st.text_area("Cobertura")
-                prima = st.text_input("Prima")
-                fecha_inicio = st.date_input("Fecha de Inicio")
-                fecha_fin = st.date_input("Fecha de Fin")
-                estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
+                # Obtener datos actuales de la póliza
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM polizas WHERE id=?", (selected_poliza[0],))
+                poliza_data = cursor.fetchone()
+                conn.close()
+                if not poliza_data:
+                    st.error("No se encontró la póliza seleccionada.")
+                    return
+
+                numero_poliza = st.text_input("Número de Póliza", value=poliza_data[1])
+                tipo_poliza = st.text_input("Tipo de Póliza", value=poliza_data[4])
+                cobertura = st.text_area("Cobertura", value=poliza_data[5])
+                prima = st.text_input("Prima", value=poliza_data[6])
+                fecha_inicio = st.date_input("Fecha de Inicio", value=poliza_data[7])
+                fecha_fin = st.date_input("Fecha de Fin", value=poliza_data[8])
+                estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"], index=["Activa", "Inactiva", "Cancelada"].index(poliza_data[9]))
+                usuario_seleccionado = st.selectbox("Selecciona un Usuario", usuarios, format_func=lambda x: x[1], index=next((i for i, u in enumerate(usuarios) if u[0] == poliza_data[3]), 0))
+                ejecutivo_comercial_seleccionado = st.selectbox("Ejecutivo Comercial", ejecutivos_comerciales, format_func=lambda x: x[1], index=next((i for i, e in enumerate(ejecutivos_comerciales) if e[0] == poliza_data[10]), 0) if poliza_data[10] else 0)
 
                 if st.button("Actualizar Póliza"):
                     conn = sqlite3.connect(DB_FILE)
@@ -640,9 +714,11 @@ def admin_dashboard():
                     try:
                         cursor.execute("""
                             UPDATE polizas
-                            SET numero_poliza = ?, tipo_poliza = ?, cobertura = ?, prima = ?, fecha_inicio = ?, fecha_fin = ?, estado = ?
+                            SET numero_poliza = ?, tipo_poliza = ?, cobertura = ?, prima = ?, fecha_inicio = ?, fecha_fin = ?, estado = ?, usuario_id = ?, ejecutivo_comercial_id = ?
                             WHERE id = ?
-                        """, (numero_poliza, tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado, selected_poliza[0]))
+                        """, (
+                            numero_poliza, tipo_poliza, cobertura, prima, fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d"), estado, usuario_seleccionado[0], ejecutivo_comercial_seleccionado[0], selected_poliza[0]
+                        ))
                         conn.commit()
                         st.success("Póliza actualizada exitosamente")
                     except sqlite3.IntegrityError:

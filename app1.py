@@ -130,7 +130,7 @@ def login_page():
     with col1:
         st.image("logo.png", width=100)
     with col2:
-        st.title("Iniciar Sesión")
+        st.title("Bienvenidos al :orange[BSC] de :blue[MILLENNIAL BROKER] - Iniciar Sesión")
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
     if st.button("Login"):
@@ -147,8 +147,14 @@ def main():
             payload = jwt.decode(st.session_state["token"], SECRET_KEY, algorithms=["HS256"])
             username = payload["username"]
             role = payload["role"]
+            # Redirigir según el rol
             if role.lower() == "admin":
                 admin_dashboard()
+            elif role.lower() in ["ejecutivo comercial", "ejecutivo_comercial", "ejecutivocomercial", "seller"]:
+                # Importa el dashboard correcto para Ejecutivo Comercial
+                from dashboards.Ejecutivo_Comercial_dashboard import welcome_message, manage_modules
+                welcome_message()
+                manage_modules()
             else:
                 user_dashboard()
         except jwt.ExpiredSignatureError:

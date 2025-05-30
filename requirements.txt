@@ -2,3 +2,4 @@ streamlit
 PyJWT
 bcrypt
 pandas
+PyMuPDF

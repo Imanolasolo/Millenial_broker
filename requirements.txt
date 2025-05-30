@@ -2,3 +2,7 @@ streamlit
 PyJWT
 bcrypt
 pandas
+PyMuPDF
+langchain
+langchain-community
+openai

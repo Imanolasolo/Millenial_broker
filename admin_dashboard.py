@@ -1,7 +1,7 @@
 import streamlit as st
 import sqlite3
 from dbconfig import DB_FILE
-from user_crud import create_user, read_users, update_user, delete_user, get_user_details
+from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details
 from client_crud import create_client, read_clients, update_client, delete_client
 from create_dashboard import create_dashboard
 from aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora

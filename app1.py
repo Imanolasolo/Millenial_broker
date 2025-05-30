@@ -8,7 +8,7 @@ import os
 from dashboards.admin_dashboard import admin_dashboard
 from dbconfig import DB_FILE, SECRET_KEY, initialize_database
 from user_dashboard import user_dashboard
-from user_crud import initialize_users_table
+from crud.user_crud import initialize_users_table
 
 # Configuración inicial
 st.set_page_config(page_icon="logo.png", page_title="Millenial Broker", layout="wide")
@@ -128,9 +128,9 @@ def authenticate(username, password):
 def login_page():
     col1, col2 = st.columns([1, 4])
     with col1:
-        st.image("logo.png", width=100)
+        st.image("assets/logo.png", width=100)
     with col2:
-        st.title("Bienvenidos al :orange[BSC] de :blue[MILLENNIAL BROKER] - Iniciar Sesión")
+        st.title("Bienvenidos al :orange[BCS] de :blue[MILLENNIAL BROKER] - Iniciar Sesión")
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
     if st.button("Login"):
@@ -147,12 +147,17 @@ def main():
             payload = jwt.decode(st.session_state["token"], SECRET_KEY, algorithms=["HS256"])
             username = payload["username"]
             role = payload["role"]
+            # Normalizar el rol para comparación robusta
+            normalized_role = role.lower().replace(" ", "").replace("_", "").replace("-", "")
             # Redirigir según el rol
-            if role.lower() == "admin":
+            if normalized_role == "admin":
                 admin_dashboard()
-            elif role.lower() in ["ejecutivo comercial", "ejecutivo_comercial", "ejecutivocomercial", "seller"]:
-                # Importa el dashboard correcto para Ejecutivo Comercial
+            elif normalized_role in ["ejecutivocomercial", "seller"]:
                 from dashboards.Ejecutivo_Comercial_dashboard import welcome_message, manage_modules
+                welcome_message()
+                manage_modules()
+            elif normalized_role in ["backofficeoperacion"]:
+                from dashboards.Back_Office_Operacion_dashboard import welcome_message, manage_modules
                 welcome_message()
                 manage_modules()
             else:

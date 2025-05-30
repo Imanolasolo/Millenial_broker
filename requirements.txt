@@ -6,3 +6,4 @@ PyMuPDF
 langchain
 langchain-community
 openai
+tiktoken

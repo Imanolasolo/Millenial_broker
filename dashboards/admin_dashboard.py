@@ -532,25 +532,37 @@ def admin_dashboard():
                         st.error("El campo 'Nombres' no puede exceder 50 caracteres.")
                     if apellidos and len(apellidos) > 50:
                         st.error("El campo 'Apellidos' no puede exceder 50 caracteres.")
-
-                    tipo_documento = st.selectbox("Tipo de Documento", tipos_documento)
-                    numero_documento = st.text_input(f"Número de {tipo_documento}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        tipo_documento = st.selectbox("Tipo de Documento", tipos_documento)
+                    with col2:
+                        numero_documento = st.text_input(f"Número de {tipo_documento}")
                     # Validación para cédula
                     if tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
                         st.error("El número de Cédula debe tener exactamente 10 caracteres.")
-                    fecha_nacimiento = st.date_input("Fecha de Nacimiento")
+                    col1, col2 = st.columns(2)
+                    with col1:    
+                        fecha_nacimiento = st.date_input("Fecha de Nacimiento")
                     if fecha_nacimiento > dt.date.today():
                         st.error("La fecha de nacimiento no puede ser mayor que hoy.")
-                    nacionalidad = st.text_input("Nacionalidad")
-                    genero = st.selectbox("Género", ["Masculino", "Femenino", "Otro"])
-                    estado_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
-                    correo_electronico = st.text_input("Correo Electrónico Contacto")
+                    with col2:
+                        nacionalidad = st.text_input("Nacionalidad")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        genero = st.selectbox("Género", ["Masculino", "Femenino", "Otro"])
+                    with col2:
+                        estado_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        correo_electronico = st.text_input("Correo Electrónico Contacto")
                     # Validación de email
                     email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
                     if correo_electronico and not re.match(email_pattern, correo_electronico):
                         st.error("El correo electrónico no tiene un formato válido.")
-                    telefono_movil = st.text_input("Teléfono Móvil")
-                    telefono_fijo = st.text_input("Teléfono Fijo")
+                    with col2:
+                        telefono_movil = st.text_input("Teléfono Móvil")
+                    with col3:
+                        telefono_fijo = st.text_input("Teléfono Fijo")
                     # Validación de formato internacional Ecuador +593XXXXXXXXX
                     phone_pattern = r"^\+593\d{9}$"
                     if telefono_movil and not re.match(phone_pattern, telefono_movil):
@@ -558,15 +570,27 @@ def admin_dashboard():
                     if telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
                         st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
                     direccion_domicilio = st.text_area("Dirección de Domicilio")
-                    provincia = st.text_input("Provincia")
-                    ciudad = st.text_input("Ciudad")
-                    codigo_postal = st.text_input("Código Postal")
-                    ocupacion_profesional = st.text_input("Ocupación / Profesión")
-                    empresa_trabajo = st.text_input("Empresa donde trabaja")
-                    tipo_empresa = st.selectbox("Tipo de Empresa", ["Pública", "Privada", "Emprendedor"])
-                    ingresos_mensuales = st.text_input("Ingresos Mensuales")
-                    nivel_educacion = st.selectbox("Nivel de Educación", ["Primaria", "Secundaria", "Superior", "Postgrado"])
-                    fumador = st.selectbox("Fumador", ["Sí", "No"])
+                    col1, col2,col3 = st.columns(3)
+                    with col1:
+                        provincia = st.text_input("Provincia")
+                    with col2:
+                        ciudad = st.text_input("Ciudad")
+                    with col3:
+                        codigo_postal = st.text_input("Código Postal")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        ocupacion_profesional = st.text_input("Ocupación / Profesión")
+                    with col2:
+                        empresa_trabajo = st.text_input("Empresa donde trabaja")
+                    with col3:
+                        tipo_empresa = st.selectbox("Tipo de Empresa", ["Pública", "Privada", "Emprendedor"])
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        ingresos_mensuales = st.text_input("Ingresos Mensuales")
+                    with col2: 
+                        nivel_educacion = st.selectbox("Nivel de Educación", ["Primaria", "Secundaria", "Superior", "Postgrado"])
+                    with col3:
+                        fumador = st.selectbox("Fumador", ["Sí", "No"])
                     actividades_riesgo = st.text_area("Actividades de Riesgo")
                     historial_medico = st.text_area("Historial Médico")
                     historial_siniestros = st.text_area("Historial de Siniestros")

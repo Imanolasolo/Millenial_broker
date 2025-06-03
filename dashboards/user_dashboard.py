@@ -2,7 +2,7 @@
 # Dashboard para el rol: user
 
 import streamlit as st
-from user_crud import get_user_details
+from crud.user_crud import get_user_details
 
 def welcome_message():
     print("Bienvenido al dashboard del rol: user")

@@ -2,14 +2,9 @@ import streamlit as st
 import sqlite3
 from dbconfig import DB_FILE
 from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details
-<<<<<<< HEAD
 from crud.client_crud import create_client, read_clients, update_client, delete_client
 from create_dashboard import create_dashboard
 from crud.aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
-=======
-from client_crud import create_client, read_clients, update_client, delete_client
-from create_dashboard import create_dashboard
-from aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
 import fitz  # PyMuPDF
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
@@ -19,7 +14,6 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI 
 from htmlTemplates import css, bot_template, user_template
 import os
->>>>>>> b0be7c8f67415dcd7d0dfd5253f143d27a0627f1
 
 def initialize_database():
     conn = sqlite3.connect(DB_FILE)

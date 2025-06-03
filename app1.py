@@ -8,12 +8,8 @@ import os
 from dashboards.admin_dashboard import admin_dashboard
 from dbconfig import DB_FILE, SECRET_KEY
 from user_dashboard import user_dashboard
-<<<<<<< HEAD
 from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details
 from database_config import initialize_database
-=======
-from crud.user_crud import initialize_users_table
->>>>>>> b0be7c8f67415dcd7d0dfd5253f143d27a0627f1
 
 # Configuración inicial
 st.set_page_config(page_icon="logo.png", page_title="Millenial Broker", layout="wide")

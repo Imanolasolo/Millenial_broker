@@ -35,8 +35,8 @@ def initialize_database():
         CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tipo_cliente TEXT,
-            nombres TEXT,
-            apellidos TEXT,
+            nombres VARCHAR(50),
+            apellidos VARCHAR(50),
             razon_social TEXT,
             tipo_documento TEXT,
             numero_documento TEXT,
@@ -44,7 +44,8 @@ def initialize_database():
             nacionalidad TEXT,
             sexo TEXT,
             estado_civil TEXT,
-            correo_electronico TEXT,
+            correo_electronico TEXT CHECK (correo_electronico LIKE '%@%' AND correo_electronico LIKE '%.%'),
+            correo_empresa TEXT,
             telefono_movil TEXT,
             telefono_fijo TEXT,
             direccion_domicilio TEXT,
@@ -70,8 +71,29 @@ def initialize_database():
             notas_adicionales TEXT,
             fecha_registro TEXT,
             ultima_actualizacion TEXT
+            -- columnas adicionales se agregan abajo si no existen
         )
     ''')
+    # Añadir columnas si no existen (para migraciones en bases ya creadas)
+    cursor.execute("PRAGMA table_info(clients)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "correo_empresa" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN correo_empresa TEXT")
+    if "sector_mercado" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN sector_mercado TEXT")
+    if "tipo_empresa_categoria" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN tipo_empresa_categoria TEXT")
+    if "tipo_persona_juridica" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN tipo_persona_juridica TEXT")
+    if "subactividad_economica" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN subactividad_economica TEXT")
+    if "pagina_web" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN pagina_web TEXT")
+    if "fecha_aniversario" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN fecha_aniversario TEXT")
+    if "contacto_autorizado_id" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN contacto_autorizado_id TEXT")
+    conn.commit()
     print("Clients table ensured.")
 
     # Create roles table if it doesn't exist

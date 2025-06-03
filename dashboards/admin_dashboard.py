@@ -1,10 +1,10 @@
 import streamlit as st
 import sqlite3
 from dbconfig import DB_FILE
-from user_crud import create_user, read_users, update_user, delete_user, get_user_details
-from client_crud import create_client, read_clients, update_client, delete_client
+from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details
+from crud.client_crud import create_client, read_clients, update_client, delete_client
 from create_dashboard import create_dashboard
-from aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
+from crud.aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
 
 def initialize_database():
     conn = sqlite3.connect(DB_FILE)
@@ -139,13 +139,13 @@ def admin_dashboard():
     user_details = get_user_details(username) if username else None
 
     # Display header with avatar, name, and group
-    st.sidebar.image("avatar.png", width=100)  # Replace with the path to your avatar image
+    st.sidebar.image("assets/avatar.png", width=100)  # Replace with the path to your avatar image
     st.sidebar.markdown(f"**Usuario:** {user_details['full_name'] if user_details else 'Desconocido'}")
     st.sidebar.markdown(f"**Afiliación:** {user_details['company_name'] if user_details else 'Sin afiliación'}")
 
     col1, col2 = st.columns([1, 4])
     with col1:
-        st.image("logo.png", width=100)
+        st.image("assets/logo.png", width=100)
     with col2:
         st.title("Dashboard de Administrador")
     st.write("Bienvenido, administrador")
@@ -186,11 +186,83 @@ def admin_dashboard():
         </style>
     """, unsafe_allow_html=True)
 
+    # Estilos para reducir el ancho de TODOS los campos de entrada (inputs, selects, multiselects, date, file, number, checkbox, radio, color, slider, etc.)
+    st.markdown("""
+        <style>
+        /* Inputs de texto */
+        .stTextInput input {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Áreas de texto */
+        .stTextArea textarea {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Selectbox y multiselect */
+        .stSelectbox div[data-baseweb="select"], .stMultiSelect div[data-baseweb="select"] {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Date input */
+        .stDateInput input {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* File uploader */
+        .stFileUploader {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Number input */
+        .stNumberInput input {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Checkbox y radio */
+        .stCheckbox, .stRadio {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Color picker */
+        .stColorPicker {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Slider */
+        .stSlider {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Botones */
+        button[kind="primary"], button[kind="secondary"], .stButton button {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Centrar los inputs si lo deseas */
+        .stTextInput, .stTextArea, .stSelectbox, .stMultiSelect, .stDateInput, .stFileUploader, .stNumberInput, .stCheckbox, .stRadio, .stColorPicker, .stSlider {
+            margin-left: 0 !important;
+        }
+        /* El selector siguiente NO funciona porque Streamlit no asigna el id del key al input HTML */
+        /* cliente_nombres input { width:22px !important;} */
+        </style>
+    """, unsafe_allow_html=True)
+
     if "module" not in st.session_state:
         st.session_state["module"] = None
 
     st.sidebar.title("Navegación")
-    st.sidebar.image("logo.png", width=80)
+    st.sidebar.image("assets/logo.png", width=80)
 
     # Selector "Actores del BCS"
     actores = [
@@ -349,8 +421,11 @@ def admin_dashboard():
 
         if operation == "Crear":
             tipo_cliente = st.selectbox("Tipo de Cliente", ["Individual", "Empresa"])
-            nombres = st.text_input("Nombres")
-            apellidos = st.text_input("Apellidos")
+            col1, col2 = st.columns(2)
+            with col1:
+                nombres = st.text_input("Nombres", key="cliente_nombres")
+            with col2:
+                apellidos = st.text_input("Apellidos")
             razon_social = st.text_input("Razón Social") if tipo_cliente == "Empresa" else None
             tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte", "RUC"])  # Cambiar "DNI" por "Cédula"
 

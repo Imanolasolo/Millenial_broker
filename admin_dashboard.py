@@ -1,141 +1,11 @@
 import streamlit as st
 import sqlite3
 from dbconfig import DB_FILE
-from user_crud import create_user, read_users, update_user, delete_user, get_user_details
-from client_crud import create_client, read_clients, update_client, delete_client
+from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details
+from crud.client_crud import create_client, read_clients, update_client, delete_client
+from crud.aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
 from create_dashboard import create_dashboard
-from aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
-
-def initialize_database():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS clients (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tipo_cliente TEXT,
-                nombres TEXT,
-                apellidos TEXT,
-                razon_social TEXT,
-                tipo_documento TEXT,
-                numero_documento TEXT,
-                fecha_nacimiento TEXT,
-                nacionalidad TEXT,
-                sexo TEXT,
-                estado_civil TEXT,
-                correo_electronico TEXT,
-                telefono_movil TEXT,
-                telefono_fijo TEXT,
-                direccion_domicilio TEXT,
-                provincia TEXT,
-                ciudad TEXT,
-                codigo_postal TEXT,
-                ocupacion_profesion TEXT,
-                empresa_trabajo TEXT,
-                tipo_empresa TEXT,
-                ingresos_mensuales TEXT,
-                nivel_educacion TEXT,
-                fumador TEXT,
-                actividades_riesgo TEXT,
-                historial_medico TEXT,
-                historial_siniestros TEXT,
-                vehiculos_registrados TEXT,
-                propiedades TEXT,
-                tipo_contribuyente TEXT,
-                numero_ruc TEXT,
-                representante_legal_id INTEGER,
-                observaciones_legales TEXT,
-                canal_preferido_contacto TEXT,
-                notas_adicionales TEXT,
-                fecha_registro TEXT,
-                ultima_actualizacion TEXT
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS roles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS role_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                role_name TEXT NOT NULL,
-                action TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT NOT NULL,
-                company_id INTEGER
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS polizas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero_poliza TEXT UNIQUE NOT NULL,
-                cliente_id INTEGER NOT NULL,
-                usuario_id INTEGER NOT NULL,
-                tipo_poliza TEXT NOT NULL,
-                cobertura TEXT,
-                prima TEXT,
-                fecha_inicio TEXT NOT NULL,
-                fecha_fin TEXT NOT NULL,
-                estado TEXT NOT NULL,
-                ejecutivo_comercial_id INTEGER
-            )
-        ''')
-        # Añadir columna si no existe
-        existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
-        if "ejecutivo_comercial_id" not in existing_columns:
-            cursor.execute("ALTER TABLE polizas ADD COLUMN ejecutivo_comercial_id INTEGER")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS companies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                address TEXT,
-                phone TEXT,
-                email TEXT
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS aseguradoras (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT UNIQUE NOT NULL,
-                direccion TEXT,
-                telefono TEXT,
-                email TEXT
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ramos_seguros (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT UNIQUE NOT NULL,
-                descripcion TEXT
-            )
-        ''')
-        # Add missing columns if they don't exist
-        existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()]
-        required_columns = {
-            "correo": "TEXT",
-            "nombres": "TEXT",
-            "apellidos": "TEXT",
-            "telefono": "TEXT",
-            "fecha_registro": "TEXT",
-            "ultima_actualizacion": "TEXT"
-        }
-        for column, column_type in required_columns.items():
-            if column not in existing_columns:
-                cursor.execute(f"ALTER TABLE users ADD COLUMN {column} {column_type}")
-        conn.commit()
-    except Exception as e:
-        st.error(f"Error al inicializar la base de datos: {e}")
-    finally:
-        conn.close()
+from database_config import initialize_database
 
 initialize_database()
 
@@ -145,13 +15,13 @@ def admin_dashboard():
     user_details = get_user_details(username) if username else None
 
     # Display header with avatar, name, and group
-    st.sidebar.image("avatar.png", width=100)  # Replace with the path to your avatar image
+    st.sidebar.image("assets/avatar.png", width=100)  # Ruta actualizada
     st.sidebar.markdown(f"**Usuario:** {user_details['full_name'] if user_details else 'Desconocido'}")
     st.sidebar.markdown(f"**Afiliación:** {user_details['company_name'] if user_details else 'Sin afiliación'}")
 
     col1, col2 = st.columns([1, 4])
     with col1:
-        st.image("logo.png", width=100)
+        st.image("assets/logo.png", width=100)
     with col2:
         st.title("Dashboard de Administrador")
     st.write("Bienvenido, administrador")
@@ -192,11 +62,81 @@ def admin_dashboard():
         </style>
     """, unsafe_allow_html=True)
 
+    # Estilos para reducir el ancho de TODOS los campos de entrada (inputs, selects, multiselects, date, file, number, checkbox, radio, color, slider, etc.)
+    st.markdown("""
+        <style>
+        /* Inputs de texto */
+        .stTextInput input {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Áreas de texto */
+        .stTextArea textarea {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Selectbox y multiselect */
+        .stSelectbox div[data-baseweb="select"], .stMultiSelect div[data-baseweb="select"] {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Date input */
+        .stDateInput input {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* File uploader */
+        .stFileUploader {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Number input */
+        .stNumberInput input {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Checkbox y radio */
+        .stCheckbox, .stRadio {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Color picker */
+        .stColorPicker {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Slider */
+        .stSlider {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Botones */
+        button[kind="primary"], button[kind="secondary"], .stButton button {
+            max-width: 300px !important;
+            min-width: 120px !important;
+            width: 50% !important;
+        }
+        /* Centrar los inputs si lo deseas */
+        .stTextInput, .stTextArea, .stSelectbox, .stMultiSelect, .stDateInput, .stFileUploader, .stNumberInput, .stCheckbox, .stRadio, .stColorPicker, .stSlider {
+            margin-left: 0 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     if "module" not in st.session_state:
         st.session_state["module"] = None
 
     st.sidebar.title("Navegación")
-    st.sidebar.image("logo.png", width=80)
+    st.sidebar.image("assets/logo.png", width=80)
     if st.sidebar.button("Usuarios"):
         st.session_state["module"] = "Usuarios"
     if st.sidebar.button("Clientes"):
@@ -428,7 +368,7 @@ def admin_dashboard():
             st.subheader("Lista de Clientes")
             clients = read_clients()
             if clients:
-                # Mostrar todos los campos de los clientes con barra horizontal
+                # Mostrar todos los campos de los clientes with barra horizontal
                 st.write([client for client in clients])
             else:
                 st.info("No hay clientes registrados.")

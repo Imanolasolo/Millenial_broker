@@ -511,255 +511,259 @@ def admin_dashboard():
         if operation == "Crear":
             tipo_cliente = st.selectbox("Tipo de Cliente", ["Individual", "Empresa"])
             if tipo_cliente == "Individual":
-                # Obtener tipos de documento únicos de la base de datos
-                import sqlite3
-                from dbconfig import DB_FILE
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                cursor.execute("SELECT DISTINCT tipo_documento FROM clients WHERE tipo_documento IS NOT NULL AND tipo_documento != ''")
-                tipos_documento_db = [row[0] for row in cursor.fetchall()]
-                conn.close()
-                tipos_documento = tipos_documento_db if tipos_documento_db else ["Cédula", "Pasaporte", "RUC"]
+                with st.form("form_cliente_individual"):
+                    # Obtener tipos de documento únicos de la base de datos
+                    import sqlite3
+                    from dbconfig import DB_FILE
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT DISTINCT tipo_documento FROM clients WHERE tipo_documento IS NOT NULL AND tipo_documento != ''")
+                    tipos_documento_db = [row[0] for row in cursor.fetchall()]
+                    conn.close()
+                    tipos_documento = tipos_documento_db if tipos_documento_db else ["Cédula", "Pasaporte", "RUC"]
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    nombres = st.text_input("Nombres (máx 50 caracteres)", key="cliente_nombres")
-                with col2:
-                    apellidos = st.text_input("Apellidos (máx 50 caracteres)")
-                # Validación de longitud
-                if nombres and len(nombres) > 50:
-                    st.error("El campo 'Nombres' no puede exceder 50 caracteres.")
-                if apellidos and len(apellidos) > 50:
-                    st.error("El campo 'Apellidos' no puede exceder 50 caracteres.")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        nombres = st.text_input("Nombres (máx 50 caracteres)", key="cliente_nombres")
+                    with col2:
+                        apellidos = st.text_input("Apellidos (máx 50 caracteres)")
+                    # Validación de longitud
+                    if nombres and len(nombres) > 50:
+                        st.error("El campo 'Nombres' no puede exceder 50 caracteres.")
+                    if apellidos and len(apellidos) > 50:
+                        st.error("El campo 'Apellidos' no puede exceder 50 caracteres.")
 
-                tipo_documento = st.selectbox("Tipo de Documento", tipos_documento)
-                numero_documento = st.text_input(f"Número de {tipo_documento}")
-                # Validación para cédula
-                if tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
-                    st.error("El número de Cédula debe tener exactamente 10 caracteres.")
-                fecha_nacimiento = st.date_input("Fecha de Nacimiento")
-                if fecha_nacimiento > dt.date.today():
-                    st.error("La fecha de nacimiento no puede ser mayor que hoy.")
-                nacionalidad = st.text_input("Nacionalidad")
-                genero = st.selectbox("Género", ["Masculino", "Femenino", "Otro"])
-                estado_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
-                correo_electronico = st.text_input("Correo Electrónico Contacto")
-                # Validación de email
-                email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
-                if correo_electronico and not re.match(email_pattern, correo_electronico):
-                    st.error("El correo electrónico no tiene un formato válido.")
-                telefono_movil = st.text_input("Teléfono Móvil")
-                telefono_fijo = st.text_input("Teléfono Fijo")
-                # Validación de formato internacional Ecuador +593XXXXXXXXX
-                phone_pattern = r"^\+593\d{9}$"
-                if telefono_movil and not re.match(phone_pattern, telefono_movil):
-                    st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
-                if telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
-                    st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
-                direccion_domicilio = st.text_area("Dirección de Domicilio")
-                provincia = st.text_input("Provincia")
-                ciudad = st.text_input("Ciudad")
-                codigo_postal = st.text_input("Código Postal")
-                ocupacion_profesional = st.text_input("Ocupación / Profesión")
-                empresa_trabajo = st.text_input("Empresa donde trabaja")
-                tipo_empresa = st.selectbox("Tipo de Empresa", ["Pública", "Privada", "Emprendedor"])
-                ingresos_mensuales = st.text_input("Ingresos Mensuales")
-                nivel_educacion = st.selectbox("Nivel de Educación", ["Primaria", "Secundaria", "Superior", "Postgrado"])
-                fumador = st.selectbox("Fumador", ["Sí", "No"])
-                actividades_riesgo = st.text_area("Actividades de Riesgo")
-                historial_medico = st.text_area("Historial Médico")
-                historial_siniestros = st.text_area("Historial de Siniestros")
-                vehiculos_registrados = st.text_area("Vehículos Registrados")
-                propiedades = st.text_area("Propiedades")
-                tipo_contribuyente = st.selectbox("Tipo de Contribuyente", ["Natural", "Jurídica"])
-                numero_ruc = st.text_input("Número de RUC")
-                representante_legal_id = st.text_input("ID del Representante Legal")
-                # Validación: 10 dígitos numéricos
-                if representante_legal_id and (not representante_legal_id.isdigit() or len(representante_legal_id) != 10):
-                    st.error("El ID Representante Legal debe tener exactamente 10 dígitos numéricos.")
-                contacto_autorizado_id = st.text_input("ID Contacto Autorizado")
-                # Validación: 10 dígitos numéricos
-                if contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
-                    st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
-                observaciones_legales = st.text_area("Observaciones Legales")
-                canal_preferido_contacto = st.selectbox("Canal Preferido de Contacto", ["Correo Electrónico", "Teléfono", "WhatsApp"])
-                notas_adicionales = st.text_area("Notas Adicionales")
-                fecha_registro = st.date_input("Fecha de Registro")
-                ultima_actualizacion = st.date_input("Última Actualización")
-                pagina_web = st.text_input("Página web")
-                url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
-                if pagina_web and not re.match(url_pattern, pagina_web):
-                    st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
-
-                if st.button("Crear Cliente"):
-                    if (nombres and len(nombres) > 50) or (apellidos and len(apellidos) > 50):
-                        st.error("El campo 'Nombres' y/o 'Apellidos' no puede exceder 50 caracteres.")
-                    elif tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
+                    tipo_documento = st.selectbox("Tipo de Documento", tipos_documento)
+                    numero_documento = st.text_input(f"Número de {tipo_documento}")
+                    # Validación para cédula
+                    if tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
                         st.error("El número de Cédula debe tener exactamente 10 caracteres.")
-                    elif fecha_nacimiento > dt.date.today():
+                    fecha_nacimiento = st.date_input("Fecha de Nacimiento")
+                    if fecha_nacimiento > dt.date.today():
                         st.error("La fecha de nacimiento no puede ser mayor que hoy.")
-                    elif correo_electronico and not re.match(email_pattern, correo_electronico):
+                    nacionalidad = st.text_input("Nacionalidad")
+                    genero = st.selectbox("Género", ["Masculino", "Femenino", "Otro"])
+                    estado_civil = st.selectbox("Estado Civil", ["Soltero", "Casado", "Divorciado", "Viudo"])
+                    correo_electronico = st.text_input("Correo Electrónico Contacto")
+                    # Validación de email
+                    email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
+                    if correo_electronico and not re.match(email_pattern, correo_electronico):
                         st.error("El correo electrónico no tiene un formato válido.")
-                    elif telefono_movil and not re.match(phone_pattern, telefono_movil):
+                    telefono_movil = st.text_input("Teléfono Móvil")
+                    telefono_fijo = st.text_input("Teléfono Fijo")
+                    # Validación de formato internacional Ecuador +593XXXXXXXXX
+                    phone_pattern = r"^\+593\d{9}$"
+                    if telefono_movil and not re.match(phone_pattern, telefono_movil):
                         st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
-                    elif telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
+                    if telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
                         st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
-                    elif pagina_web and not re.match(url_pattern, pagina_web):
+                    direccion_domicilio = st.text_area("Dirección de Domicilio")
+                    provincia = st.text_input("Provincia")
+                    ciudad = st.text_input("Ciudad")
+                    codigo_postal = st.text_input("Código Postal")
+                    ocupacion_profesional = st.text_input("Ocupación / Profesión")
+                    empresa_trabajo = st.text_input("Empresa donde trabaja")
+                    tipo_empresa = st.selectbox("Tipo de Empresa", ["Pública", "Privada", "Emprendedor"])
+                    ingresos_mensuales = st.text_input("Ingresos Mensuales")
+                    nivel_educacion = st.selectbox("Nivel de Educación", ["Primaria", "Secundaria", "Superior", "Postgrado"])
+                    fumador = st.selectbox("Fumador", ["Sí", "No"])
+                    actividades_riesgo = st.text_area("Actividades de Riesgo")
+                    historial_medico = st.text_area("Historial Médico")
+                    historial_siniestros = st.text_area("Historial de Siniestros")
+                    vehiculos_registrados = st.text_area("Vehículos Registrados")
+                    propiedades = st.text_area("Propiedades")
+                    tipo_contribuyente = st.selectbox("Tipo de Contribuyente", ["Natural", "Jurídica"])
+                    numero_ruc = st.text_input("Número de RUC")
+                    representante_legal_id = st.text_input("ID del Representante Legal")
+                    # Validación: 10 dígitos numéricos
+                    if representante_legal_id and (not representante_legal_id.isdigit() or len(representante_legal_id) != 10):
+                        st.error("El ID Representante Legal debe tener exactamente 10 dígitos numéricos.")
+                    contacto_autorizado_id = st.text_input("ID Contacto Autorizado")
+                    # Validación: 10 dígitos numéricos
+                    if contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
+                        st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
+                    observaciones_legales = st.text_area("Observaciones Legales")
+                    canal_preferido_contacto = st.selectbox("Canal Preferido de Contacto", ["Correo Electrónico", "Teléfono", "WhatsApp"])
+                    notas_adicionales = st.text_area("Notas Adicionales")
+                    fecha_registro = st.date_input("Fecha de Registro")
+                    ultima_actualizacion = st.date_input("Última Actualización")
+                    pagina_web = st.text_input("Página web")
+                    url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
+                    if pagina_web and not re.match(url_pattern, pagina_web):
                         st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                    elif nombres and apellidos and numero_documento and correo_electronico:
-                        result = create_client(
-                            tipo_cliente=tipo_cliente,
-                            nombres=nombres,
-                            apellidos=apellidos,
-                            razon_social=None,
-                            tipo_documento=tipo_documento,
-                            numero_documento=numero_documento,
-                            fecha_nacimiento=fecha_nacimiento.strftime("%Y-%m-%d"),
-                            nacionalidad=nacionalidad,
-                            sexo=genero,
-                            estado_civil=estado_civil,
-                            correo_electronico=correo_electronico,
-                            telefono_movil=telefono_movil,
-                            telefono_fijo=telefono_fijo,
-                            direccion_domicilio=direccion_domicilio,
-                            provincia=None,
-                            ciudad=None,
-                            codigo_postal=None,
-                            ocupacion_profesion=None,
-                            empresa_trabajo=None,
-                            tipo_empresa=None,
-                            ingresos_mensuales=None,
-                            nivel_educacion=None,
-                            fumador=None,
-                            actividades_riesgo=None,
-                            historial_medico=None,
-                            historial_siniestros=None,
-                            vehiculos_registrados=None,
-                            propiedades=None,
-                            tipo_contribuyente=None,
-                            representante_legal_id=None,
-                            observaciones_legales=None,
-                            canal_preferido_contacto=None,
-                            notas_adicionales=None,
-                            fecha_registro=fecha_nacimiento.strftime("%Y-%m-%d"),
-                            ultima_actualizacion=fecha_nacimiento.strftime("%Y-%m-%d"),
-                            pagina_web=pagina_web,
-                            fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
-                            contacto_autorizado_id=contacto_autorizado_id
-                        )
-                        st.success(result) if "exitosamente" in result else st.error(result)
-                    else:
-                        st.error("Completa todos los campos obligatorios.")
+                    fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
+
+                    submitted = st.form_submit_button("Crear Cliente")
+                    if submitted:
+                        if (nombres and len(nombres) > 50) or (apellidos and len(apellidos) > 50):
+                            st.error("El campo 'Nombres' y/o 'Apellidos' no puede exceder 50 caracteres.")
+                        elif tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
+                            st.error("El número de Cédula debe tener exactamente 10 caracteres.")
+                        elif fecha_nacimiento > dt.date.today():
+                            st.error("La fecha de nacimiento no puede ser mayor que hoy.")
+                        elif correo_electronico and not re.match(email_pattern, correo_electronico):
+                            st.error("El correo electrónico no tiene un formato válido.")
+                        elif telefono_movil and not re.match(phone_pattern, telefono_movil):
+                            st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
+                        elif telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
+                            st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
+                        elif pagina_web and not re.match(url_pattern, pagina_web):
+                            st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
+                        elif nombres and apellidos and numero_documento and correo_electronico:
+                            result = create_client(
+                                tipo_cliente=tipo_cliente,
+                                nombres=nombres,
+                                apellidos=apellidos,
+                                razon_social=None,
+                                tipo_documento=tipo_documento,
+                                numero_documento=numero_documento,
+                                fecha_nacimiento=fecha_nacimiento.strftime("%Y-%m-%d"),
+                                nacionalidad=nacionalidad,
+                                sexo=genero,
+                                estado_civil=estado_civil,
+                                correo_electronico=correo_electronico,
+                                telefono_movil=telefono_movil,
+                                telefono_fijo=telefono_fijo,
+                                direccion_domicilio=direccion_domicilio,
+                                provincia=None,
+                                ciudad=None,
+                                codigo_postal=None,
+                                ocupacion_profesion=None,
+                                empresa_trabajo=None,
+                                tipo_empresa=None,
+                                ingresos_mensuales=None,
+                                nivel_educacion=None,
+                                fumador=None,
+                                actividades_riesgo=None,
+                                historial_medico=None,
+                                historial_siniestros=None,
+                                vehiculos_registrados=None,
+                                propiedades=None,
+                                tipo_contribuyente=None,
+                                representante_legal_id=None,
+                                observaciones_legales=None,
+                                canal_preferido_contacto=None,
+                                notas_adicionales=None,
+                                fecha_registro=fecha_nacimiento.strftime("%Y-%m-%d"),
+                                ultima_actualizacion=fecha_nacimiento.strftime("%Y-%m-%d"),
+                                pagina_web=pagina_web,
+                                fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
+                                contacto_autorizado_id=contacto_autorizado_id
+                            )
+                            st.success(result) if "exitosamente" in result else st.error(result)
+                        else:
+                            st.error("Completa todos los campos obligatorios.")
             else:  # Empresa
-                razon_social = st.text_input("Razón Social")
-                tipo_documento = st.selectbox("Tipo de Documento", ["RUC"])
-                numero_documento = st.text_input("Número de RUC")
-                # Validación: RUC exactamente 13 dígitos
-                if numero_documento and len(numero_documento) != 13:
-                    st.error("El Número de RUC debe tener exactamente 13 dígitos.")
-                representante_legal_id = st.text_input("ID Representante Legal")
-                # Validación: 10 dígitos numéricos
-                if representante_legal_id and (not representante_legal_id.isdigit() or len(representante_legal_id) != 10):
-                    st.error("El ID Representante Legal debe tener exactamente 10 dígitos numéricos.")
-                contacto_autorizado_id = st.text_input("ID Contacto Autorizado")
-                # Validación: 10 dígitos numéricos
-                if contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
-                    st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
-                correo_electronico = st.text_input("Correo Electrónico Contacto")
-                correo_empresa = st.text_input("Correo Empresa")
-                # Validación de email para ambos campos
-                email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
-                if correo_electronico and not re.match(email_pattern, correo_electronico):
-                    st.error("El correo electrónico de contacto no tiene un formato válido.")
-                if correo_empresa and not re.match(email_pattern, correo_empresa):
-                    st.error("El correo empresa no tiene un formato válido.")
-                # Sector/Mercado dropdown
-                sector_mercado = st.selectbox(
-                    "Sector/Mercado",
-                    ["Publico", "Privado", "Mixto", "ONG", "Cooperativo", "Educativo", "Salud"]
-                )
-                # Tipo Empresa dropdown
-                tipo_empresa_categoria = st.selectbox(
-                    "Tipo Empresa",
-                    ["Microempresa", "Pequeña Empresa", "Mediana Empresa", "Gran Empresa"]
-                )
-                # Tipo Persona Jurídica dropdown
-                tipo_persona_juridica_options = [
-                    "SCVS - Sociedad Anónima (S.A.)",
-                    "SCVS - Compañía Ltda.",
-                    "SCVS - S.A.S. (Sociedad por Acciones Simplificadas)",
-                    "SCVS - Sucursal Extranjera",
-                    "SCVS - Compañía en Comandita / Colectiva",
-                    "SEPS - Cooperativa de Ahorro y Crédito",
-                    "SEPS - Asociación",
-                    "SEPS - Fundación",
-                    "SB - Banco Privado",
-                    "SB - Aseguradora",
-                    "Otro - Empresa Pública",
-                    "Otro - ONG",
-                    "Otro - Institución Educativa",
-                    "SCVS - S.A.S.",
-                    "SCVS - Sucursal Extranjera",
-                    "SCVS - Comandita / Colectiva",
-                    "SEPS - Cooperativa",
-                    "SEPS - Asociación",
-                    "SEPS - Fundación",
-                    "SB - Banco Privado",
-                    "SB - Aseguradora",
-                    "Otro - Empresa Pública",
-                    "Otro - ONG",
-                    "Otro - Institución Educativa"
-                ]
-                tipo_persona_juridica = st.selectbox(
-                    "Tipo Persona Jurídica",
-                    tipo_persona_juridica_options
-                )
-                # Subactividad Económica
-                subactividad_economica = st.text_input("Subactividad Económica")
-                telefono_fijo = st.text_input("Teléfono Fijo")  # <-- Asegura que este campo esté definido
-                direccion_domicilio = st.text_area("Dirección de la Empresa")
-                tipo_empresa = st.text_input("Tipo de Empresa")
-                ingresos_mensuales = st.text_input("Ingresos Mensuales")
-                observaciones_legales = st.text_area("Observaciones Legales")
-                pagina_web = st.text_input("Página web")
-                url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
-                if pagina_web and not re.match(url_pattern, pagina_web):
-                    st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
-                if st.button("Crear Cliente"):
-                    if razon_social and numero_documento and correo_electronico:
-                        result = create_client(
-                            tipo_cliente=tipo_cliente,
-                            nombres=None,
-                            apellidos=None,
-                            razon_social=razon_social,
-                            tipo_documento=tipo_documento,
-                            numero_documento=numero_documento,
-                            fecha_nacimiento=None,
-                            nacionalidad=None,
-                            sexo=None,
-                            estado_civil=None,
-                            correo_electronico=correo_electronico,
-                            correo_empresa=correo_empresa,
-                            sector_mercado=sector_mercado,
-                            tipo_empresa_categoria=tipo_empresa_categoria,
-                            tipo_persona_juridica=tipo_persona_juridica,
-                            subactividad_economica=subactividad_economica,
-                            telefono_fijo=telefono_fijo,
-                            direccion_domicilio=direccion_domicilio,
-                            tipo_empresa=tipo_empresa,
-                            ingresos_mensuales=ingresos_mensuales,
-                            observaciones_legales=observaciones_legales,
-                            pagina_web=pagina_web,
-                            fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
-                            representante_legal_id=representante_legal_id,
-                            contacto_autorizado_id=contacto_autorizado_id
-                            # ...otros campos si es necesario...
-                        )
-                        st.success(result) if "exitosamente" in result else st.error(result)
-                    else:
-                        st.error("Completa todos los campos obligatorios.")
+                with st.form("form_cliente_empresa"):
+                    razon_social = st.text_input("Razón Social")
+                    tipo_documento = st.selectbox("Tipo de Documento", ["RUC"])
+                    numero_documento = st.text_input("Número de RUC")
+                    # Validación: RUC exactamente 13 dígitos
+                    if numero_documento and len(numero_documento) != 13:
+                        st.error("El Número de RUC debe tener exactamente 13 dígitos.")
+                    representante_legal_id = st.text_input("ID Representante Legal")
+                    # Validación: 10 dígitos numéricos
+                    if representante_legal_id and (not representante_legal_id.isdigit() or len(representante_legal_id) != 10):
+                        st.error("El ID Representante Legal debe tener exactamente 10 dígitos numéricos.")
+                    contacto_autorizado_id = st.text_input("ID Contacto Autorizado")
+                    # Validación: 10 dígitos numéricos
+                    if contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
+                        st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
+                    correo_electronico = st.text_input("Correo Electrónico Contacto")
+                    correo_empresa = st.text_input("Correo Empresa")
+                    # Validación de email para ambos campos
+                    email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
+                    if correo_electronico and not re.match(email_pattern, correo_electronico):
+                        st.error("El correo electrónico de contacto no tiene un formato válido.")
+                    if correo_empresa and not re.match(email_pattern, correo_empresa):
+                        st.error("El correo empresa no tiene un formato válido.")
+                    # Sector/Mercado dropdown
+                    sector_mercado = st.selectbox(
+                        "Sector/Mercado",
+                        ["Publico", "Privado", "Mixto", "ONG", "Cooperativo", "Educativo", "Salud"]
+                    )
+                    # Tipo Empresa dropdown
+                    tipo_empresa_categoria = st.selectbox(
+                        "Tipo Empresa",
+                        ["Microempresa", "Pequeña Empresa", "Mediana Empresa", "Gran Empresa"]
+                    )
+                    # Tipo Persona Jurídica dropdown
+                    tipo_persona_juridica_options = [
+                        "SCVS - Sociedad Anónima (S.A.)",
+                        "SCVS - Compañía Ltda.",
+                        "SCVS - S.A.S. (Sociedad por Acciones Simplificadas)",
+                        "SCVS - Sucursal Extranjera",
+                        "SCVS - Compañía en Comandita / Colectiva",
+                        "SEPS - Cooperativa de Ahorro y Crédito",
+                        "SEPS - Asociación",
+                        "SEPS - Fundación",
+                        "SB - Banco Privado",
+                        "SB - Aseguradora",
+                        "Otro - Empresa Pública",
+                        "Otro - ONG",
+                        "Otro - Institución Educativa",
+                        "SCVS - S.A.S.",
+                        "SCVS - Sucursal Extranjera",
+                        "SCVS - Comandita / Colectiva",
+                        "SEPS - Cooperativa",
+                        "SEPS - Asociación",
+                        "SEPS - Fundación",
+                        "SB - Banco Privado",
+                        "SB - Aseguradora",
+                        "Otro - Empresa Pública",
+                        "Otro - ONG",
+                        "Otro - Institución Educativa"
+                    ]
+                    tipo_persona_juridica = st.selectbox(
+                        "Tipo Persona Jurídica",
+                        tipo_persona_juridica_options
+                    )
+                    # Subactividad Económica
+                    subactividad_economica = st.text_input("Subactividad Económica")
+                    telefono_fijo = st.text_input("Teléfono Fijo")  # <-- Asegura que este campo esté definido
+                    direccion_domicilio = st.text_area("Dirección de la Empresa")
+                    tipo_empresa = st.text_input("Tipo de Empresa")
+                    ingresos_mensuales = st.text_input("Ingresos Mensuales")
+                    observaciones_legales = st.text_area("Observaciones Legales")
+                    pagina_web = st.text_input("Página web")
+                    url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
+                    if pagina_web and not re.match(url_pattern, pagina_web):
+                        st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
+                    fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
+                    submitted = st.form_submit_button("Crear Cliente")
+                    if submitted:
+                        if razon_social and numero_documento and correo_electronico:
+                            result = create_client(
+                                tipo_cliente=tipo_cliente,
+                                nombres=None,
+                                apellidos=None,
+                                razon_social=razon_social,
+                                tipo_documento=tipo_documento,
+                                numero_documento=numero_documento,
+                                fecha_nacimiento=None,
+                                nacionalidad=None,
+                                sexo=None,
+                                estado_civil=None,
+                                correo_electronico=correo_electronico,
+                                correo_empresa=correo_empresa,
+                                sector_mercado=sector_mercado,
+                                tipo_empresa_categoria=tipo_empresa_categoria,
+                                tipo_persona_juridica=tipo_persona_juridica,
+                                subactividad_economica=subactividad_economica,
+                                telefono_fijo=telefono_fijo,
+                                direccion_domicilio=direccion_domicilio,
+                                tipo_empresa=tipo_empresa,
+                                ingresos_mensuales=ingresos_mensuales,
+                                observaciones_legales=observaciones_legales,
+                                pagina_web=pagina_web,
+                                fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
+                                representante_legal_id=representante_legal_id,
+                                contacto_autorizado_id=contacto_autorizado_id
+                                # ...otros campos si es necesario...
+                            )
+                            st.success(result) if "exitosamente" in result else st.error(result)
+                        else:
+                            st.error("Completa todos los campos obligatorios.")
 
         elif operation == "Leer":
             st.subheader("Lista de Clientes")
@@ -1491,6 +1495,7 @@ def admin_dashboard():
             conn.close()
             if ramos:
                 # Convertir los datos a un DataFrame de Streamlit
+               
                 import pandas as pd
                 df = pd.DataFrame(ramos)
                 st.dataframe(df)  # Mostrar como tabla interactiva

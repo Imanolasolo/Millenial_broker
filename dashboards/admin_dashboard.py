@@ -393,6 +393,8 @@ def admin_dashboard():
         operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
 
         if operation == "Crear":
+            import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+            from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
             username = st.text_input("Nombre de Usuario")
             password = st.text_input("Contraseña", type="password")
             correo = st.text_input("Correo Electrónico")
@@ -438,6 +440,8 @@ def admin_dashboard():
 
         elif operation == "Modificar":
             st.subheader("Modificar Usuario")
+            import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+            from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users")
@@ -492,6 +496,8 @@ def admin_dashboard():
 
         elif operation == "Borrar":
             st.subheader("Eliminar Usuario")
+            import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+            from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users")
@@ -990,17 +996,16 @@ def admin_dashboard():
             client_options = [f"{client[1]} {client[2]} (ID: {client[0]})" for client in clients]
             selected_client = st.selectbox("Selecciona un cliente para eliminar", client_options)
 
-            if selected_client:
-                # Extraer el ID del cliente seleccionado
-                selected_client_id = int(selected_client.split("(ID: ")[-1][:-1])
-
-                if st.button("Eliminar Cliente"):
-                    result = delete_client(selected_client_id)
-                    st.success(result) if "exitosamente" in result else st.error(result)
+            if st.button("Eliminar Cliente"):
+                result = delete_client(selected_client_id)
+                st.success(result) if "exitosamente" in result else st.error(result)
 
     elif module == "Roles":
         st.subheader("Gestión de Roles")
         operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
+
+        import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+        from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
 
         if operation == "Crear":
             role_name = st.text_input("Nombre del Rol")
@@ -1029,8 +1034,10 @@ def admin_dashboard():
             cursor.execute("SELECT * FROM roles")
             roles = cursor.fetchall()
             conn.close()
-            for role in roles:
-                st.write(f"ID: {role[0]}, Nombre: {role[1]}")
+            if roles:
+                st.table([{"ID": role[0], "Nombre": role[1]} for role in roles])
+            else:
+                st.info("No hay roles registrados.")
 
         elif operation == "Modificar":
             conn = sqlite3.connect(DB_FILE)
@@ -1084,37 +1091,33 @@ def admin_dashboard():
         st.subheader("Gestión de Pólizas de Seguro")
         operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
 
+        import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+        from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
+
         if operation == "Crear":
             numero_poliza = st.text_input("Número de Póliza")
-
-            # Obtener lista de clientes
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
             clientes = cursor.fetchall()
             cursor.execute("SELECT id, username, role FROM users")
             usuarios_roles = cursor.fetchall()
-            cursor.execute("SELECT id, razon_social FROM aseguradoras")  # Fetch aseguradoras
+            cursor.execute("SELECT id, razon_social FROM aseguradoras")
             aseguradoras = cursor.fetchall()
-            cursor.execute("SELECT id, nombre FROM ramos_seguros")  # Fetch ramos_seguros
+            cursor.execute("SELECT id, nombre FROM ramos_seguros")
             ramos_seguros = cursor.fetchall()
             conn.close()
-
             usuarios = [(u[0], u[1]) for u in usuarios_roles]
-            # Filtrar ejecutivos comerciales por rol
             ejecutivos_comerciales = [(u[0], u[1]) for u in usuarios_roles if u[2] and u[2].strip().lower().replace(" ", "_") in ["ejecutivo_comercial", "seller"]]
-
             cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1])
             usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=lambda x: x[1])
             aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1])
             ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1])
-            # CAMPO EJECUTIVO COMERCIAL
             ejecutivo_comercial_seleccionado = st.selectbox(
                 "Selecciona un Ejecutivo Comercial",
                 ejecutivos_comerciales if ejecutivos_comerciales else [("", "No hay ejecutivos comerciales")],
                 format_func=lambda x: x[1] if x and x[1] else "No hay ejecutivos comerciales"
             )
-
             tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"])
             cobertura = st.text_area("Cobertura")
             prima = st.text_input("Prima")
@@ -1127,10 +1130,9 @@ def admin_dashboard():
             deducible = st.text_input("Deducible")
             sucursal = st.text_input("Sucursal")
             tipo_facturacion = st.selectbox("Tipo de Facturación", ["Contado", "Débito", "Cuota Directa"])
-            numero_factura = st.text_input("Nº de factura")  # Nuevo campo
-            numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)")  # Nuevo campo multilinea
-            tipo_anexo = st.text_input("Tipo de anexo")  # Nuevo campo
-
+            numero_factura = st.text_input("Nº de factura")
+            numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)")
+            tipo_anexo = st.text_input("Tipo de anexo")
             if st.button("Crear Póliza"):
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
@@ -1164,10 +1166,6 @@ def admin_dashboard():
                     r.nombre AS ramo,
                     p.tipo_poliza, p.cobertura, p.prima, 
                     p.fecha_inicio, p.fecha_fin, p.estado, 
-                    a.razon_social AS aseguradora,
-                    r.nombre AS ramo,
-                    p.tipo_poliza, p.cobertura, p.prima, 
-                    p.fecha_inicio, p.fecha_fin, p.estado, 
                     p.fecha_emision, p.suma_asegurada, p.deducible, p.sucursal, 
                     p.tipo_facturacion, p.linea_negocio, p.numero_factura, 
                     p.numero_anexo, p.tipo_anexo,
@@ -1180,7 +1178,6 @@ def admin_dashboard():
             """)
             polizas = cursor.fetchall()
             conn.close()
-
             if polizas:
                 st.write([{
                     "ID": poliza[0],
@@ -1227,17 +1224,14 @@ def admin_dashboard():
             cursor.execute("SELECT id, username FROM users")
             ejecutivos_comerciales = cursor.fetchall()
             conn.close()
-
             if not polizas:
                 st.warning("No hay pólizas registradas.")
                 return
-
             selected_poliza = st.selectbox("Selecciona una póliza", polizas, format_func=lambda x: x[1])
             if selected_poliza:
                 if len(selected_poliza) < 20:
                     st.error("Error: Los datos de la póliza seleccionada están incompletos.")
                     return
-
                 numero_poliza = st.text_input("Número de Póliza", value=selected_poliza[1])
                 tipo_poliza = st.selectbox(
                     "Tipo de Póliza",
@@ -1249,16 +1243,12 @@ def admin_dashboard():
                 fecha_inicio_vigencia = st.date_input("Fecha de Inicio Vigencia", value=selected_poliza[5])
                 fecha_fin_vigencia = st.date_input("Fecha de Fin Vigencia", value=selected_poliza[6])
                 estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"], index=["Activa", "Inactiva", "Cancelada"].index(selected_poliza[7]))
-
                 aseguradora_index = next((i for i, aseguradora in enumerate(aseguradoras) if aseguradora[0] == selected_poliza[8]), 0)
                 aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1], index=aseguradora_index)
-
                 ramo_index = next((i for i, ramo in enumerate(ramos_seguros) if ramo[0] == selected_poliza[9]), 0)
                 ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1], index=ramo_index)
-
                 ejecutivo_comercial_index = next((i for i, ejecutivo in enumerate(ejecutivos_comerciales) if ejecutivo[0] == selected_poliza[19]), 0)
                 ejecutivo_comercial_seleccionado = st.selectbox("Selecciona un Ejecutivo Comercial", ejecutivos_comerciales, format_func=lambda x: x[1], index=ejecutivo_comercial_index)
-
                 import datetime
                 try:
                     fecha_emision_value = datetime.datetime.strptime(selected_poliza[10], "%Y-%m-%d").date() if selected_poliza[10] else None
@@ -1276,8 +1266,7 @@ def admin_dashboard():
                 linea_negocio = st.text_input("Línea de negocio", value=selected_poliza[15])
                 numero_factura = st.text_input("Nº de factura", value=selected_poliza[16])
                 numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)", value=selected_poliza[17])
-                tipo_anexo = st.text_input("Tipo de anexo", value=selected_poliza[18])  # Nuevo campo
-
+                tipo_anexo = st.text_input("Tipo de anexo", value=selected_poliza[18])
                 if st.button("Actualizar Póliza"):
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
@@ -1308,9 +1297,7 @@ def admin_dashboard():
             cursor.execute("SELECT id, numero_poliza FROM polizas")
             polizas = cursor.fetchall()
             conn.close()
-
             selected_poliza = st.selectbox("Selecciona una póliza para eliminar", polizas, format_func=lambda x: x[1])
-
             if st.button("Eliminar Póliza"):
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
@@ -1327,13 +1314,16 @@ def admin_dashboard():
         st.subheader("Gestión de Agencias")  # Cambiado de "Agrupadores" a "Agencias"
         operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
 
+        import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+        from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
+
         if operation == "Crear":
-            with st.form("crear_agencia"):  # Cambiado de "crear_agrupador" a "crear_agencia"
-                name = st.text_input("Nombre de la Agencia")  # Cambiado de "Agrupador" a "Agencia"
+            with st.form("crear_agencia"):
+                name = st.text_input("Nombre de la Agencia")
                 address = st.text_area("Dirección")
                 phone = st.text_input("Teléfono")
                 email = st.text_input("Correo Electrónico")
-                submit_button = st.form_submit_button("Crear Agencia")  # Cambiado de "Agrupador" a "Agencia"
+                submit_button = st.form_submit_button("Crear Agencia")
                 if submit_button:
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
@@ -1343,9 +1333,9 @@ def admin_dashboard():
                             VALUES (?, ?, ?, ?)
                         """, (name, address, phone, email))
                         conn.commit()
-                        st.success("Agencia creada exitosamente")  # Cambiado de "Agrupador" a "Agencia"
+                        st.success("Agencia creada exitosamente")
                     except sqlite3.IntegrityError:
-                        st.error("El nombre de la agencia ya existe.")  # Cambiado de "Agrupador" a "Agencia"
+                        st.error("El nombre de la agencia ya existe.")
                     finally:
                         conn.close()
 
@@ -1354,28 +1344,28 @@ def admin_dashboard():
             cursor = conn.cursor()
             cursor.execute("SELECT id, name, address, phone, email FROM companies")
             columns = [col[0] for col in cursor.description]
-            agencias = [dict(zip(columns, row)) for row in cursor.fetchall()]  # Cambiado de "agrupadores" a "agencias"
+            agencias = [dict(zip(columns, row)) for row in cursor.fetchall()]
             conn.close()
             if agencias:
                 import pandas as pd
                 df = pd.DataFrame(agencias)
                 st.dataframe(df)
             else:
-                st.info("No hay agencias registradas.")  # Cambiado de "agrupadores" a "agencias"
+                st.info("No hay agencias registradas.")
 
         elif operation == "Modificar":
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT id, name FROM companies")
-            agencias = cursor.fetchall()  # Cambiado de "agrupadores" a "agencias"
+            agencias = cursor.fetchall()
             conn.close()
-            selected_agencia = st.selectbox("Selecciona una agencia", agencias, format_func=lambda x: x[1])  # Cambiado de "Agrupador" a "Agencia"
+            selected_agencia = st.selectbox("Selecciona una agencia", agencias, format_func=lambda x: x[1])
             if selected_agencia:
-                name = st.text_input("Nombre de la Agencia", value=selected_agencia[1])  # Cambiado de "Agrupador" a "Agencia"
+                name = st.text_input("Nombre de la Agencia", value=selected_agencia[1])
                 address = st.text_area("Dirección")
                 phone = st.text_input("Teléfono")
                 email = st.text_input("Correo Electrónico")
-                if st.button("Actualizar Agencia"):  # Cambiado de "Agrupador" a "Agencia"
+                if st.button("Actualizar Agencia"):
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
                     try:
@@ -1385,9 +1375,9 @@ def admin_dashboard():
                             WHERE id = ?
                         """, (name, address, phone, email, selected_agencia[0]))
                         conn.commit()
-                        st.success("Agencia actualizada exitosamente")  # Cambiado de "Agrupador" a "Agencia"
+                        st.success("Agencia actualizada exitosamente")
                     except sqlite3.IntegrityError:
-                        st.error("Error al actualizar la agencia.")  # Cambiado de "Agrupador" a "Agencia"
+                        st.error("Error al actualizar la agencia.")
                     finally:
                         conn.close()
 
@@ -1395,18 +1385,18 @@ def admin_dashboard():
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT id, name FROM companies")
-            agencias = cursor.fetchall()  # Cambiado de "agrupadores" a "agencias"
+            agencias = cursor.fetchall()
             conn.close()
-            selected_agencia = st.selectbox("Selecciona una agencia para eliminar", agencias, format_func=lambda x: x[1])  # Cambiado de "Agrupador" a "Agencia"
-            if st.button("Eliminar Agencia"):  # Cambiado de "Agrupador" a "Agencia"
+            selected_agencia = st.selectbox("Selecciona una agencia para eliminar", agencias, format_func=lambda x: x[1])
+            if st.button("Eliminar Agencia"):
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
                 try:
                     cursor.execute("DELETE FROM companies WHERE id = ?", (selected_agencia[0],))
                     conn.commit()
-                    st.success("Agencia eliminada exitosamente")  # Cambiado de "Agrupador" a "Agencia"
+                    st.success("Agencia eliminada exitosamente")
                 except sqlite3.IntegrityError:
-                    st.error("No se puede eliminar la agencia asignada a usuarios.")  # Cambiado de "Agrupador" a "Agencia"
+                    st.error("No se puede eliminar la agencia asignada a usuarios.")
                 finally:
                     conn.close()
 
@@ -1414,8 +1404,11 @@ def admin_dashboard():
         st.subheader("Gestión de Aseguradoras")
         action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar"])
 
+        import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+        from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
+
         if action == "Crear":
-            with st.form("crear_aseguradora"):  # Wrap fields in a form
+            with st.form("crear_aseguradora"):
                 tipo_contribuyente = st.text_input("Tipo de Contribuyente")
                 tipo_identificacion = st.text_input("Tipo de Identificación")
                 identificacion = st.text_input("Identificación")
@@ -1426,18 +1419,15 @@ def admin_dashboard():
                 aniversario = st.date_input("Aniversario").strftime("%Y-%m-%d")
                 web = st.text_input("Web")
                 correo_electronico = st.text_input("Correo Electrónico")
-                
                 # Fetch available Ramos de Seguros
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
                 cursor.execute("SELECT id, nombre FROM ramos_seguros")
                 ramos = cursor.fetchall()
                 conn.close()
-                
                 ramo_ids = [ramo[0] for ramo in st.multiselect("Seleccione Ramos de Seguros", ramos, format_func=lambda x: x[1])]
-                
-                submit_button = st.form_submit_button("Crear Aseguradora")  # Add submit button
-                if submit_button:  # Check if the form is submitted
+                submit_button = st.form_submit_button("Crear Aseguradora")
+                if submit_button:
                     aseguradora_data = (
                         tipo_contribuyente,
                         tipo_identificacion,
@@ -1450,7 +1440,7 @@ def admin_dashboard():
                         web,
                         correo_electronico
                     )
-                    result = create_aseguradora(aseguradora_data, ramo_ids)  # Pass data and ramo_ids as separate arguments
+                    result = create_aseguradora(aseguradora_data, ramo_ids)
                     st.success(result) if "exitosamente" in result else st.error(result)
 
         elif action == "Leer":
@@ -1480,17 +1470,16 @@ def admin_dashboard():
                         "Web": aseguradora[9],
                         "Correo Electrónico": aseguradora[10],
                         "Ramos de Seguros": ", ".join(ramos)
-
                     })
                 conn.close()
-                st.dataframe(data)  # Display data as a Streamlit dataframe
+                st.dataframe(data)
             else:
                 st.info("No hay aseguradoras registradas.")
 
         elif action == "Actualizar":
             aseguradoras = read_aseguradoras()
             if aseguradoras:
-                aseguradora_names = {aseguradora[4]: aseguradora[0] for aseguradora in aseguradoras}  # Map name to ID
+                aseguradora_names = {aseguradora[4]: aseguradora[0] for aseguradora in aseguradoras}
                 selected_name = st.selectbox("Seleccione una aseguradora", list(aseguradora_names.keys()))
                 selected_id = aseguradora_names[selected_name]
                 aseguradora = next(a for a in aseguradoras if a[0] == selected_id)
@@ -1498,27 +1487,22 @@ def admin_dashboard():
                     tipo_contribuyente = st.text_input("Tipo de Contribuyente", value=aseguradora[1])
                     tipo_identificacion = st.text_input("Tipo de Identificación", value=aseguradora[2])
                     identificacion = st.text_input("Identificación", value=aseguradora[3])
-
                     razon_social = st.text_input("Razón Social", value=aseguradora[4])
                     nombre_comercial = st.text_input("Nombre Comercial", value=aseguradora[5])
+
                     pais = st.text_input("País", value=aseguradora[6])
                     representante_legal = st.text_input("Representante Legal", value=aseguradora[7])
-                    aniversario = st.date_input(
-                        "Aniversario", 
-                        value=aseguradora[8] if aseguradora[8] else None  # Use raw string for date
+                    aniversario = st.date_input("Aniversario", value=aseguradora[8] if aseguradora[8] else None)
 
-                    )
+
+
                     web = st.text_input("Web", value=aseguradora[9])
                     correo_electronico = st.text_input("Correo Electrónico", value=aseguradora[10])
-                    
-
                     # Fetch available Ramos de Seguros
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
                     cursor.execute("SELECT id, nombre FROM ramos_seguros")
                     ramos = cursor.fetchall()
-                    
-                    # Fetch currently associated Ramos de Seguros
                     cursor.execute(""" 
                         SELECT ramo_id 
                         FROM aseguradora_ramos 
@@ -1526,21 +1510,19 @@ def admin_dashboard():
                     """, (selected_id,))
                     current_ramo_ids = [row[0] for row in cursor.fetchall()]
                     conn.close()
-                    
                     ramo_ids = [ramo[0] for ramo in st.multiselect(
                         "Seleccione Ramos de Seguros", 
                         ramos, 
                         default=[r for r in ramos if r[0] in current_ramo_ids],
                         format_func=lambda x: x[1]
                     )]
-                    
-                    submit_button = st.form_submit_button("Actualizar Aseguradora")  # Add submit button
-                    if submit_button:  # Check if the form is submitted
+                    submit_button = st.form_submit_button("Actualizar Aseguradora")
+                    if submit_button:
                         result = update_aseguradora(selected_id, (
                             tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
                             nombre_comercial, pais, representante_legal, aniversario.strftime("%Y-%m-%d") if aniversario else None,
                             web, correo_electronico
-                        ), ramo_ids)  # Pass ramo_ids as an argument
+                        ), ramo_ids)
                         st.success(result) if "exitosamente" in result else st.error(result)
             else:
                 st.info("No hay aseguradoras registradas.")
@@ -1548,7 +1530,7 @@ def admin_dashboard():
         elif action == "Eliminar":
             aseguradoras = read_aseguradoras()
             if aseguradoras:
-                aseguradora_names = {aseguradora[4]: aseguradora[0] for aseguradora in aseguradoras}  # Map name to ID
+                aseguradora_names = {aseguradora[4]: aseguradora[0] for aseguradora in aseguradoras}
                 selected_name = st.selectbox("Seleccione una aseguradora para eliminar", list(aseguradora_names.keys()))
                 if st.button("Eliminar"):
                     selected_id = aseguradora_names[selected_name]
@@ -1559,6 +1541,9 @@ def admin_dashboard():
 
     elif module == "Ramos de Seguros":
         st.subheader("Gestión de Ramos de Seguros")
+
+        import sqlite3  # <-- Asegura que sqlite3 esté importado en este scope
+        from dbconfig import DB_FILE  # <-- Asegura que DB_FILE esté importado en este scope
 
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -1582,18 +1567,13 @@ def admin_dashboard():
 
         elif action == "Leer":
             st.subheader("Lista de Ramos de Seguros")
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
             cursor.execute("SELECT id, nombre, descripcion FROM ramos_seguros")
             columns = [col[0] for col in cursor.description]
             ramos = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            conn.close()
             if ramos:
-                # Convertir los datos a un DataFrame de Streamlit
-               
                 import pandas as pd
                 df = pd.DataFrame(ramos)
-                st.dataframe(df)  # Mostrar como tabla interactiva
+                st.dataframe(df)
             else:
                 st.info("No hay ramos de seguros registrados.")
 

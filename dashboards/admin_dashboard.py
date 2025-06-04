@@ -802,134 +802,201 @@ def admin_dashboard():
 
         elif operation == "Modificar":
             st.subheader("Modificar Cliente")
+            from dbconfig import DB_FILE
+            import sqlite3
             clients = read_clients()
-            client_ids = [client["id"] for client in clients]
-            selected_client_id = st.selectbox("Selecciona un cliente", client_ids)
+            client_options = []
+            for client in clients:
+                if client.get("tipo_cliente") == "Empresa":
+                    label = f"{client.get('razon_social', '')} (Empresa)"
+                else:
+                    label = f"{client.get('nombres', '')} {client.get('apellidos', '')} (Individual)"
+                client_options.append((client["id"], label))
+            selected_client = st.selectbox("Selecciona un cliente", client_options, format_func=lambda x: x[1] if x else "")
+            selected_client_id = selected_client[0] if selected_client else None
+
             if selected_client_id:
-                client_data = next(client for client in clients if client["id"] == selected_client_id)
-                tipo_cliente = client_data.get("tipo_cliente", "Individual")
-                if tipo_cliente == "Individual":
-                    # Obtener tipos de documento únicos de la base de datos
-                    import sqlite3
-                    from dbconfig import DB_FILE
-                    conn = sqlite3.connect(DB_FILE)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT DISTINCT tipo_documento FROM clients WHERE tipo_documento IS NOT NULL AND tipo_documento != ''")
-                    tipos_documento_db = [row[0] for row in cursor.fetchall()]
-                    conn.close()
-                    tipos_documento = tipos_documento_db if tipos_documento_db else ["Cédula", "Pasaporte", "RUC"]
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM clients WHERE id = ?", (selected_client_id,))
+                client_data = cursor.fetchone()
+                cursor.execute("PRAGMA table_info(clients)")
+                columns = [col[1] for col in cursor.fetchall()]
+                conn.close()
 
-                    nombres = st.text_input("Nombres (máx 50 caracteres)", value=client_data.get("nombres", ""))
-                    apellidos = st.text_input("Apellidos (máx 50 caracteres)", value=client_data.get("apellidos", ""))
-                    # Validación de longitud
-                    if nombres and len(nombres) > 50:
-                        st.error("El campo 'Nombres' no puede exceder 50 caracteres.")
-                    if apellidos and len(apellidos) > 50:
-                        st.error("El campo 'Apellidos' no puede exceder 50 caracteres.")
-
-                    tipo_documento = st.selectbox("Tipo de Documento", tipos_documento, index=tipos_documento.index(client_data.get("tipo_documento", tipos_documento[0])) if client_data.get("tipo_documento", None) in tipos_documento else 0)
-                    numero_documento = st.text_input(f"Número de {tipo_documento}", value=client_data.get("numero_documento", ""))
-                    # Validación para cédula
-                    if tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
-                        st.error("El número de Cédula debe tener exactamente 10 caracteres.")
-
-                    correo_electronico = st.text_input("Correo Electrónico Contacto", value=client_data.get("correo_electronico", ""))
-                    # Validación de email
-                    email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
-                    if correo_electronico and not re.match(email_pattern, correo_electronico):
-                        st.error("El correo electrónico no tiene un formato válido.")
-
-                    telefono_movil = st.text_input("Teléfono Móvil", value=client_data.get("telefono_movil", ""))
-                    telefono_fijo = st.text_input("Teléfono Fijo", value=client_data.get("telefono_fijo", ""))
-                    # Validación de formato internacional Ecuador +593XXXXXXXXX
-                    phone_pattern = r"^\+593\d{9}$"
-                    if telefono_movil and not re.match(phone_pattern, telefono_movil):
-                        st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
-                    if telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
-                        st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
-
-                    fecha_nacimiento_raw = client_data.get("fecha_nacimiento", None)
-                    if isinstance(fecha_nacimiento_raw, str):
-                        try:
-                            fecha_nacimiento_value = dt.datetime.strptime(fecha_nacimiento_raw, "%Y-%m-%d").date()
-                        except Exception:
-                            fecha_nacimiento_value = dt.date.today()
-                    elif isinstance(fecha_nacimiento_raw, dt.date):
-                        fecha_nacimiento_value = fecha_nacimiento_raw
-                    else:
-                        fecha_nacimiento_value = dt.date.today()
-                    fecha_nacimiento = st.date_input("Fecha de Nacimiento", value=fecha_nacimiento_value)
-                    if fecha_nacimiento > dt.date.today():
-                        st.error("La fecha de nacimiento no puede ser mayor que hoy.")
-                    pagina_web = st.text_input("Página web", value=client_data.get("pagina_web", ""))
-                    url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
-                    if pagina_web and not re.match(url_pattern, pagina_web):
-                        st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                    fecha_aniversario_raw = client_data.get("fecha_aniversario", None)
-                    if isinstance(fecha_aniversario_raw, str) and fecha_aniversario_raw:
-                        try:
-                            fecha_aniversario_value = dt.datetime.strptime(fecha_aniversario_raw, "%Y-%m-%d").date()
-                        except Exception:
-                            fecha_aniversario_value = None
-                    elif isinstance(fecha_aniversario_raw, dt.date):
-                        fecha_aniversario_value = fecha_aniversario_raw
-                    else:
-                        fecha_aniversario_value = None
-                    fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=fecha_aniversario_value)
-
-                    contacto_autorizado_id = st.text_input("ID Contacto Autorizado", value=client_data.get("contacto_autorizado_id", ""))
-                    # Validación: 10 dígitos numéricos
-                    if contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
-                        st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
-
-                    if st.button("Actualizar Cliente"):
-                        if (nombres and len(nombres) > 50) or (apellidos and len(apellidos) > 50):
-                            st.error("El campo 'Nombres' y/o 'Apellidos' no puede exceder 50 caracteres.")
-                        elif tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
-                            st.error("El número de Cédula debe tener exactamente 10 caracteres.")
-                        elif fecha_nacimiento > dt.date.today():
-                            st.error("La fecha de nacimiento no puede ser mayor que hoy.")
-                        elif correo_electronico and not re.match(email_pattern, correo_electronico):
-                            st.error("El correo electrónico no tiene un formato válido.")
-                        elif telefono_movil and not re.match(phone_pattern, telefono_movil):
-                            st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
-                        elif telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
-                            st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
-                        elif pagina_web and not re.match(url_pattern, pagina_web):
-                            st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                        elif contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
-                            st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
+                if client_data:
+                    client_dict = dict(zip(columns, client_data))
+                    tipo_cliente = client_dict.get("tipo_cliente", "Individual")
+                    with st.form("form_modificar_cliente"):
+                        tipo_cliente_val = st.selectbox("Tipo de Cliente", ["Individual", "Empresa"], index=0 if tipo_cliente == "Individual" else 1, disabled=True)
+                        if tipo_cliente == "Empresa":
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                razon_social = st.text_input("Razón Social", value=client_dict.get("razon_social", ""))
+                            with col2:
+                                nombres = None
+                                apellidos = None
                         else:
-                            result = update_client(
-                                client_id=selected_client_id,
-                                nombres=nombres,
-                                apellidos=apellidos,
-                                tipo_documento=tipo_documento,
-                                numero_documento=numero_documento,
-                                correo_electronico=correo_electronico,
-                                correo_empresa=correo_empresa,
-                                sector_mercado=sector_mercado,
-                                tipo_empresa_categoria=tipo_empresa_categoria,
-                                tipo_persona_juridica=tipo_persona_juridica,
-                                subactividad_economica=subactividad_economica,
-                                telefono_movil=telefono_movil,
-                                direccion_domicilio=direccion_domicilio,
-                                fecha_nacimiento=fecha_nacimiento.strftime("%Y-%m-%d"),
-                                pagina_web=pagina_web,
-                                fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
-                                contacto_autorizado_id=contacto_autorizado_id
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                nombres = st.text_input("Nombres", value=client_dict.get("nombres", ""))
+                            with col2:
+                                apellidos = st.text_input("Apellidos", value=client_dict.get("apellidos", ""))
+                            razon_social = None
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            tipo_documento = st.text_input("Tipo de Documento", value=client_dict.get("tipo_documento", ""))
+                        with col2:
+                            numero_documento = st.text_input("Número de Documento", value=client_dict.get("numero_documento", ""))
+                        with col3:
+                            fecha_nacimiento = st.date_input(
+                                "Fecha de Nacimiento",
+                                value=dt.datetime.strptime(client_dict["fecha_nacimiento"], "%Y-%m-%d").date() if client_dict.get("fecha_nacimiento") else dt.date.today()
                             )
-                            st.success(result) if "exitosamente" in result else st.error(result)
+                        col1,col2,col3 = st.columns(3)
+                        with col1:
+                            nacionalidad = st.text_input("Nacionalidad", value=client_dict.get("nacionalidad", ""))
+                        with col2:
+                            sexo = st.text_input("Sexo", value=client_dict.get("sexo", ""))
+                        with col3:
+                            estado_civil = st.text_input("Estado Civil", value=client_dict.get("estado_civil", ""))
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            correo_electronico = st.text_input("Correo Electrónico", value=client_dict.get("correo_electronico", ""))
+                        with col2:
+                            correo_empresa = st.text_input("Correo Empresa", value=client_dict.get("correo_empresa", ""))
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            telefono_movil = st.text_input("Teléfono Móvil", value=client_dict.get("telefono_movil", ""))
+                        with col2:
+                            telefono_fijo = st.text_input("Teléfono Fijo", value=client_dict.get("telefono_fijo", ""))
+                        direccion_domicilio = st.text_area("Dirección Domicilio", value=client_dict.get("direccion_domicilio", ""))
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            provincia = st.text_input("Provincia", value=client_dict.get("provincia", ""))
+                        with col2:
+                            ciudad = st.text_input("Ciudad", value=client_dict.get("ciudad", ""))
+                        with col3:
+                            codigo_postal = st.text_input("Código Postal", value=client_dict.get("codigo_postal", ""))
+                        ocupacion_profesion = st.text_input("Ocupación/Profesión", value=client_dict.get("ocupacion_profesion", ""))
+                        empresa_trabajo = st.text_input("Empresa donde trabaja", value=client_dict.get("empresa_trabajo", ""))
+                        tipo_empresa = st.text_input("Tipo de Empresa", value=client_dict.get("tipo_empresa", ""))
+                        ingresos_mensuales = st.text_input("Ingresos Mensuales", value=client_dict.get("ingresos_mensuales", ""))
+                        nivel_educacion = st.text_input("Nivel de Educación", value=client_dict.get("nivel_educacion", ""))
+                        fumador = st.text_input("Fumador", value=client_dict.get("fumador", ""))
+                        actividades_riesgo = st.text_area("Actividades de Riesgo", value=client_dict.get("actividades_riesgo", ""))
+                        historial_medico = st.text_area("Historial Médico", value=client_dict.get("historial_medico", ""))
+                        historial_siniestros = st.text_area("Historial Siniestros", value=client_dict.get("historial_siniestros", ""))
+                        vehiculos_registrados = st.text_area("Vehículos Registrados", value=client_dict.get("vehiculos_registrados", ""))
+                        propiedades = st.text_area("Propiedades", value=client_dict.get("propiedades", ""))
+                        tipo_contribuyente = st.text_input("Tipo Contribuyente", value=client_dict.get("tipo_contribuyente", ""))
+                        numero_ruc = st.text_input("Número RUC", value=client_dict.get("numero_ruc", ""))
+                        representante_legal_id = st.text_input("ID Representante Legal", value=client_dict.get("representante_legal_id", ""))
+                        observaciones_legales = st.text_area("Observaciones Legales", value=client_dict.get("observaciones_legales", ""))
+                        canal_preferido_contacto = st.text_input("Canal Preferido de Contacto", value=client_dict.get("canal_preferido_contacto", ""))
+                        notas_adicionales = st.text_area("Notas Adicionales", value=client_dict.get("notas_adicionales", ""))
+                        fecha_registro = st.date_input(
+                            "Fecha de Registro",
+                            value=dt.datetime.strptime(client_dict["fecha_registro"], "%Y-%m-%d").date() if client_dict.get("fecha_registro") else dt.date.today()
+                        )
+                        ultima_actualizacion = st.date_input(
+                            "Última Actualización",
+                            value=dt.datetime.strptime(client_dict["ultima_actualizacion"], "%Y-%m-%d").date() if client_dict.get("ultima_actualizacion") else dt.date.today()
+                        )
+                        sector_mercado = st.text_input("Sector/Mercado", value=client_dict.get("sector_mercado", ""))
+                        tipo_empresa_categoria = st.text_input("Tipo Empresa Categoría", value=client_dict.get("tipo_empresa_categoria", ""))
+                        tipo_persona_juridica = st.text_input("Tipo Persona Jurídica", value=client_dict.get("tipo_persona_juridica", ""))
+                        subactividad_economica = st.text_input("Subactividad Económica", value=client_dict.get("subactividad_economica", ""))
+                        pagina_web = st.text_input("Página Web", value=client_dict.get("pagina_web", ""))
+                        fecha_aniversario = st.date_input(
+                            "Fecha de Aniversario",
+                            value=dt.datetime.strptime(client_dict["fecha_aniversario"], "%Y-%m-%d").date() if client_dict.get("fecha_aniversario") else dt.date.today()
+                        )
+                        contacto_autorizado_id = st.text_input("ID Contacto Autorizado", value=client_dict.get("contacto_autorizado_id", ""))
+
+                        submitted = st.form_submit_button("Actualizar Cliente")
+                        if submitted:
+                            update_fields = {
+                                "tipo_cliente": tipo_cliente,
+                                "nombres": nombres,
+                                "apellidos": apellidos,
+                                "razon_social": razon_social,
+                                "tipo_documento": tipo_documento,
+                                "numero_documento": numero_documento,
+                                "fecha_nacimiento": fecha_nacimiento.strftime("%Y-%m-%d") if fecha_nacimiento else None,
+                                "nacionalidad": nacionalidad,
+                                "sexo": sexo,
+                                "estado_civil": estado_civil,
+                                "correo_electronico": correo_electronico,
+                                "correo_empresa": correo_empresa,
+                                "telefono_movil": telefono_movil,
+                                "telefono_fijo": telefono_fijo,
+                                "direccion_domicilio": direccion_domicilio,
+                                "provincia": provincia,
+                                "ciudad": ciudad,
+                                "codigo_postal": codigo_postal,
+                                "ocupacion_profesion": ocupacion_profesion,
+                                "empresa_trabajo": empresa_trabajo,
+                                "tipo_empresa": tipo_empresa,
+                                "ingresos_mensuales": ingresos_mensuales,
+                                "nivel_educacion": nivel_educacion,
+                                "fumador": fumador,
+                                "actividades_riesgo": actividades_riesgo,
+                                "historial_medico": historial_medico,
+                                "historial_siniestros": historial_siniestros,
+                                "vehiculos_registrados": vehiculos_registrados,
+                                "propiedades": propiedades,
+                                "tipo_contribuyente": tipo_contribuyente,
+                                "numero_ruc": numero_ruc,
+                                "representante_legal_id": representante_legal_id,
+                                "observaciones_legales": observaciones_legales,
+                                "canal_preferido_contacto": canal_preferido_contacto,
+                                "notas_adicionales": notas_adicionales,
+                                "fecha_registro": fecha_registro.strftime("%Y-%m-%d") if fecha_registro else None,
+                                "ultima_actualizacion": ultima_actualizacion.strftime("%Y-%m-%d") if ultima_actualizacion else None,
+                                "sector_mercado": sector_mercado,
+                                "tipo_empresa_categoria": tipo_empresa_categoria,
+                                "tipo_persona_juridica": tipo_persona_juridica,
+                                "subactividad_economica": subactividad_economica,
+                                "pagina_web": pagina_web,
+                                "fecha_aniversario": fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
+                                "contacto_autorizado_id": contacto_autorizado_id
+                            }
+                            set_clause = ", ".join([f"{k} = ?" for k in update_fields.keys()])
+                            values = list(update_fields.values())
+                            values.append(selected_client_id)
+                            try:
+                                conn = sqlite3.connect(DB_FILE)
+                                cursor = conn.cursor()
+                                cursor.execute(f"UPDATE clients SET {set_clause} WHERE id = ?", values)
+                                conn.commit()
+                                conn.close()
+                                st.success("Cliente actualizado exitosamente.")
+                            except Exception as e:
+                                st.error(f"Error al actualizar el cliente: {e}")
 
         elif operation == "Borrar":
             st.subheader("Eliminar Cliente")
-            clients = read_clients()
-            client_ids = [client["id"] for client in clients]
-            selected_client_id = st.selectbox("Selecciona un cliente para eliminar", client_ids)
+            # Asegura que sqlite3 y DB_FILE estén importados en este scope
+            import sqlite3
+            from dbconfig import DB_FILE
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, nombres, apellidos FROM clients")
+            clients = cursor.fetchall()
+            conn.close()
 
-            if st.button("Eliminar Cliente"):
-                result = delete_client(selected_client_id)
-                st.success(result) if "exitosamente" in result else st.error(result)
+            # Crear un selectbox con las opciones de cliente
+            client_options = [f"{client[1]} {client[2]} (ID: {client[0]})" for client in clients]
+            selected_client = st.selectbox("Selecciona un cliente para eliminar", client_options)
+
+            if selected_client:
+                # Extraer el ID del cliente seleccionado
+                selected_client_id = int(selected_client.split("(ID: ")[-1][:-1])
+
+                if st.button("Eliminar Cliente"):
+                    result = delete_client(selected_client_id)
+                    st.success(result) if "exitosamente" in result else st.error(result)
 
     elif module == "Roles":
         st.subheader("Gestión de Roles")
@@ -1413,6 +1480,7 @@ def admin_dashboard():
                         "Web": aseguradora[9],
                         "Correo Electrónico": aseguradora[10],
                         "Ramos de Seguros": ", ".join(ramos)
+
                     })
                 conn.close()
                 st.dataframe(data)  # Display data as a Streamlit dataframe
@@ -1426,10 +1494,11 @@ def admin_dashboard():
                 selected_name = st.selectbox("Seleccione una aseguradora", list(aseguradora_names.keys()))
                 selected_id = aseguradora_names[selected_name]
                 aseguradora = next(a for a in aseguradoras if a[0] == selected_id)
-                with st.form("actualizar_aseguradora"):  # Wrap fields in a form
+                with st.form("actualizar_aseguradora"):
                     tipo_contribuyente = st.text_input("Tipo de Contribuyente", value=aseguradora[1])
                     tipo_identificacion = st.text_input("Tipo de Identificación", value=aseguradora[2])
                     identificacion = st.text_input("Identificación", value=aseguradora[3])
+
                     razon_social = st.text_input("Razón Social", value=aseguradora[4])
                     nombre_comercial = st.text_input("Nombre Comercial", value=aseguradora[5])
                     pais = st.text_input("País", value=aseguradora[6])
@@ -1437,10 +1506,12 @@ def admin_dashboard():
                     aniversario = st.date_input(
                         "Aniversario", 
                         value=aseguradora[8] if aseguradora[8] else None  # Use raw string for date
+
                     )
                     web = st.text_input("Web", value=aseguradora[9])
                     correo_electronico = st.text_input("Correo Electrónico", value=aseguradora[10])
                     
+
                     # Fetch available Ramos de Seguros
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
@@ -1448,7 +1519,7 @@ def admin_dashboard():
                     ramos = cursor.fetchall()
                     
                     # Fetch currently associated Ramos de Seguros
-                    cursor.execute("""
+                    cursor.execute(""" 
                         SELECT ramo_id 
                         FROM aseguradora_ramos 
                         WHERE aseguradora_id = ?

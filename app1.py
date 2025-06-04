@@ -84,7 +84,13 @@ def login_page():
         st.image("assets/logo.png", width=100)
     with col2:
         st.title("Bienvenidos al :orange[BCS] de :blue[MILLENNIAL BROKER] - Iniciar Sesión")
-    username = st.text_input("Usuario")
+    # --- CAMBIO: dropdown para usuarios ---
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM users")
+    user_list = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    username = st.selectbox("Usuario", user_list) if user_list else st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
     if st.button("Login"):
         token = authenticate(username, password)

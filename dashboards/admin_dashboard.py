@@ -548,7 +548,11 @@ def admin_dashboard():
                         st.error("El número de Cédula debe tener exactamente 10 caracteres.")
                     col1, col2 = st.columns(2)
                     with col1:    
-                        fecha_nacimiento = st.date_input("Fecha de Nacimiento")
+                        fecha_nacimiento = st.date_input(
+                            "Fecha de Nacimiento",
+                            min_value=dt.date(1900, 1, 1),
+                            max_value=dt.date.today()
+                        )
                     if fecha_nacimiento > dt.date.today():
                         st.error("La fecha de nacimiento no puede ser mayor que hoy.")
                     with col2:
@@ -992,13 +996,17 @@ def admin_dashboard():
             clients = cursor.fetchall()
             conn.close()
 
-            # Crear un selectbox con las opciones de cliente
-            client_options = [f"{client[1]} {client[2]} (ID: {client[0]})" for client in clients]
-            selected_client = st.selectbox("Selecciona un cliente para eliminar", client_options)
+            # Crear un selectbox con las opciones de cliente (guardar tupla (id, label))
+            client_options = [(client[0], f"{client[1]} {client[2]} (ID: {client[0]})") for client in clients]
+            selected_client = st.selectbox("Selecciona un cliente para eliminar", client_options, format_func=lambda x: x[1] if x else "")
+            selected_client_id = selected_client[0] if selected_client else None
 
             if st.button("Eliminar Cliente"):
-                result = delete_client(selected_client_id)
-                st.success(result) if "exitosamente" in result else st.error(result)
+                if selected_client_id:
+                    result = delete_client(selected_client_id)
+                    st.success(result) if "exitosamente" in result else st.error(result)
+                else:
+                    st.error("Debes seleccionar un cliente para eliminar.")
 
     elif module == "Roles":
         st.subheader("Gestión de Roles")
@@ -1492,6 +1500,7 @@ def admin_dashboard():
 
                     pais = st.text_input("País", value=aseguradora[6])
                     representante_legal = st.text_input("Representante Legal", value=aseguradora[7])
+
                     aniversario = st.date_input("Aniversario", value=aseguradora[8] if aseguradora[8] else None)
 
 

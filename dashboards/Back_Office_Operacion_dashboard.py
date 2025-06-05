@@ -161,14 +161,16 @@ def manage_modules():
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id,
-                    CASE
-                        WHEN razon_social IS NOT NULL AND razon_social != ''
-                            THEN razon_social
-                        ELSE COALESCE(nombres, '') || ' ' || COALESCE(apellidos, '')
+                   CASE
+                       WHEN razon_social IS NOT NULL AND razon_social != ''
+                           THEN razon_social
+                       WHEN (COALESCE(nombres, '') || ' ' || COALESCE(apellidos, '')) != ' '
+                           THEN COALESCE(nombres, '') || ' ' || COALESCE(apellidos, '')
+                       ELSE 'Cliente sin nombre'
                     END AS nombre_completo
                 FROM clients
             """)
-            clientes = cursor.fetchall()
+            clientes = [c for c in cursor.fetchall() if c[1] and c[1].strip() != '']
             cursor.execute("SELECT id, username, role FROM users")
             usuarios_roles = cursor.fetchall()
             cursor.execute("SELECT id, razon_social FROM aseguradoras")

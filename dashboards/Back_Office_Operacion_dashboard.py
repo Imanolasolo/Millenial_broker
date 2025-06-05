@@ -159,7 +159,15 @@ def manage_modules():
             # Obtener lista de clientes
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
-            cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
+            cursor.execute("""
+                SELECT id,
+                    CASE
+                        WHEN razon_social IS NOT NULL AND razon_social != ''
+                            THEN razon_social
+                        ELSE COALESCE(nombres, '') || ' ' || COALESCE(apellidos, '')
+                    END AS nombre_completo
+                FROM clients
+            """)
             clientes = cursor.fetchall()
             cursor.execute("SELECT id, username, role FROM users")
             usuarios_roles = cursor.fetchall()

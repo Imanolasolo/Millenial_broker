@@ -81,8 +81,18 @@ def manage_modules():
             # 1. Selección de cliente
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
-            cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
-            clientes = cursor.fetchall()
+            cursor.execute("""
+                SELECT id,
+                    CASE
+                        WHEN razon_social IS NOT NULL AND razon_social != ''
+                            THEN razon_social
+                        WHEN (COALESCE(nombres, '') || ' ' || COALESCE(apellidos, '')) != ' '
+                            THEN COALESCE(nombres, '') || ' ' || COALESCE(apellidos, '')
+                        ELSE 'Cliente sin nombre'
+                    END AS nombre_completo
+                FROM clients
+            """)
+            clientes = [c for c in cursor.fetchall() if c[1] and c[1].strip() != '']
             conn.close()
             if not clientes:
                 st.info("No hay clientes registrados.")

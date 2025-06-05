@@ -88,7 +88,12 @@ def manage_modules():
                 st.info("No hay clientes registrados.")
                 return
 
-            cliente_seleccionado = st.selectbox("Selecciona un cliente", clientes, format_func=lambda x: x[1])
+            def cliente_format(x):
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return x[1]
+                return str(x) if x else "Desconocido"
+
+            cliente_seleccionado = st.selectbox("Selecciona un cliente", clientes, format_func=cliente_format)
             if cliente_seleccionado:
                 # 2. Mostrar pólizas del cliente seleccionado
                 conn = sqlite3.connect(DB_FILE)
@@ -104,7 +109,12 @@ def manage_modules():
                     st.info("Este cliente no tiene pólizas registradas.")
                     return
 
-                poliza_seleccionada = st.selectbox("Selecciona una póliza para modificar", polizas, format_func=lambda x: x[1])
+                def poliza_format(x):
+                    if isinstance(x, (list, tuple)) and len(x) > 1:
+                        return x[1]
+                    return str(x) if x else "Desconocido"
+
+                poliza_seleccionada = st.selectbox("Selecciona una póliza para modificar", polizas, format_func=poliza_format)
                 if poliza_seleccionada:
                     # 3. Mostrar y permitir modificar los datos de la póliza seleccionada
                     conn = sqlite3.connect(DB_FILE)
@@ -162,14 +172,39 @@ def manage_modules():
             usuarios = [(u[0], u[1]) for u in usuarios_roles]
             ejecutivos_comerciales = [(u[0], u[1]) for u in usuarios_roles if u[2] and u[2].strip().lower().replace(" ", "_") in ["ejecutivo_comercial", "seller"]]
 
-            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1], key="crear_poliza_cliente")
-            usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=lambda x: x[1], key="crear_poliza_gestor")
-            aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1], key="crear_poliza_aseguradora")
-            ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1], key="crear_poliza_ramo")
+            def cliente_format(x):
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return x[1]
+                return str(x) if x else "Desconocido"
+
+            def usuario_format(x):
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return x[1]
+                return str(x) if x else "Desconocido"
+
+            def aseguradora_format(x):
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return x[1]
+                return str(x) if x else "Desconocido"
+
+            def ramo_format(x):
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return x[1]
+                return str(x) if x else "Desconocido"
+
+            def ejecutivo_format(x):
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return x[1]
+                return str(x) if x else "No hay ejecutivos comerciales"
+
+            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=cliente_format, key="crear_poliza_cliente")
+            usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=usuario_format, key="crear_poliza_gestor")
+            aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=aseguradora_format, key="crear_poliza_aseguradora")
+            ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=ramo_format, key="crear_poliza_ramo")
             ejecutivo_comercial_seleccionado = st.selectbox(
                 "Selecciona un Ejecutivo Comercial",
                 ejecutivos_comerciales if ejecutivos_comerciales else [("", "No hay ejecutivos comerciales")],
-                format_func=lambda x: x[1] if x and x[1] else "No hay ejecutivos comerciales",
+                format_func=ejecutivo_format,
                 key="crear_poliza_ejecutivo"
             )
 

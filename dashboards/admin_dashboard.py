@@ -1234,51 +1234,38 @@ def admin_dashboard():
         elif operation == "Leer":
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
+            # Cambia aquí: muestra nombres/apellidos para individuales y razón social para empresas
             cursor.execute("""
                 SELECT 
                     p.id, p.numero_poliza, 
-                    c.nombres || ' ' || c.apellidos AS cliente, 
-                    u.username AS gestor, 
-                    a.razon_social AS aseguradora,
-                    r.nombre AS ramo,
+                    CASE 
+                        WHEN c.tipo_cliente = 'Empresa' THEN c.razon_social
+                        ELSE TRIM(COALESCE(c.nombres, '') || ' ' || COALESCE(c.apellidos, ''))
+                    END AS cliente,
+                    u.username AS usuario, 
                     p.tipo_poliza, p.cobertura, p.prima, 
                     p.fecha_inicio, p.fecha_fin, p.estado, 
-                    p.fecha_emision, p.suma_asegurada, p.deducible, p.sucursal, 
-                    p.tipo_facturacion, p.linea_negocio, p.numero_factura, 
-                    p.numero_anexo, p.tipo_anexo,
                     (SELECT username FROM users WHERE id = p.ejecutivo_comercial_id) AS ejecutivo_comercial
                 FROM polizas p
                 JOIN clients c ON p.cliente_id = c.id
                 JOIN users u ON p.usuario_id = u.id
-                JOIN aseguradoras a ON p.aseguradora_id = a.id
-                JOIN ramos_seguros r ON p.ramo_id = r.id
             """)
             polizas = cursor.fetchall()
             conn.close()
+
             if polizas:
                 st.write([{
                     "ID": poliza[0],
                     "Número de Póliza": poliza[1],
                     "Cliente": poliza[2],
-                    "Gestor": poliza[3],
-                    "Aseguradora": poliza[4],
-                    "Ramo": poliza[5],
-                    "Tipo de Póliza": poliza[6],
-                    "Cobertura": poliza[7],
-                    "Prima": poliza[8],
-                    "Fecha de Inicio Vigencia": poliza[9],
-                    "Fecha de Fin Vigencia": poliza[10],
-                    "Estado": poliza[11],
-                    "Fecha de emisión": poliza[12],
-                    "Suma Asegurada": poliza[13],
-                    "Deducible": poliza[14],
-                    "Sucursal": poliza[15],
-                    "Tipo de Facturación": poliza[16],
-                    "Línea de negocio": poliza[17],
-                    "Nº de factura": poliza[18],
-                    "Nº de Anexo": poliza[19],
-                    "Tipo de anexo": poliza[20],
-                    "Ejecutivo Comercial": poliza[21]
+                    "Usuario": poliza[3],
+                    "Tipo de Póliza": poliza[4],
+                    "Cobertura": poliza[5],
+                    "Prima": poliza[6],
+                    "Fecha de Inicio": poliza[7],
+                    "Fecha de Fin": poliza[8],
+                    "Estado": poliza[9],
+                    "Ejecutivo Comercial": poliza[10]
                 } for poliza in polizas])
             else:
                 st.info("No hay pólizas registradas.")

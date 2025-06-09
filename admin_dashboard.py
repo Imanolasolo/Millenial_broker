@@ -2,12 +2,8 @@ import streamlit as st
 import sqlite3
 from dbconfig import DB_FILE
 from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details
-<<<<<<< HEAD
 from crud.client_crud import create_client, read_clients, update_client, delete_client
 from crud.aseguradora_crud import create_aseguradora, read_aseguradoras, update_aseguradora, delete_aseguradora
-=======
-from client_crud import create_client, read_clients, update_client, delete_client
->>>>>>> b0be7c8f67415dcd7d0dfd5253f143d27a0627f1
 from create_dashboard import create_dashboard
 from database_config import initialize_database
 
@@ -495,7 +491,7 @@ def admin_dashboard():
                     conn.close()
 
     elif module == "Pólizas":
-        st.subheader("Gestión de Pólizas de Seguro")
+        st.subheader("Gestión de Pólizas de Seguro.")
         operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
 
         if operation == "Crear":
@@ -516,16 +512,45 @@ def admin_dashboard():
             ejecutivos_comerciales = cursor.fetchall()
             conn.close()
 
-            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1], key="cliente_poliza")
-            usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=lambda x: x[1], key="gestor_poliza")
-            aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1], key="aseguradora_poliza")
-            ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1], key="ramo_poliza")
-            ejecutivo_comercial_seleccionado = st.selectbox(
-                "Selecciona un Ejecutivo Comercial",
-                ejecutivos_comerciales,
-                format_func=lambda x: x[1],
-                key="ejecutivo_comercial_poliza"
-            )
+            # Defensive: avoid empty list errors and index errors in format_func
+            def safe_label(x):
+                if x is None:
+                    return "N/A"
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return str(x[1])
+                return str(x)
+
+            if clientes:
+                cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=safe_label, key="cliente_poliza")
+            else:
+                st.warning("No hay clientes registrados. Por favor, registre un cliente antes de crear una póliza.")
+                cliente_seleccionado = None
+
+            if usuarios:
+                usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=safe_label, key="gestor_poliza")
+            else:
+                usuario_seleccionado = None
+
+            if aseguradoras:
+                aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=safe_label, key="aseguradora_poliza")
+            else:
+                aseguradora_seleccionada = None
+
+            if ramos_seguros:
+                ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=safe_label, key="ramo_poliza")
+            else:
+                ramo_seleccionado = None
+
+            if ejecutivos_comerciales:
+                ejecutivo_comercial_seleccionado = st.selectbox(
+                    "Selecciona un Ejecutivo Comercial",
+                    ejecutivos_comerciales,
+                    format_func=safe_label,
+                    key="ejecutivo_comercial_poliza"
+                )
+            else:
+                ejecutivo_comercial_seleccionado = None
+
             tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"], key="tipo_poliza")
             cobertura = st.text_area("Cobertura", key="cobertura_poliza")
             prima = st.text_input("Prima", key="prima_poliza")
@@ -543,49 +568,52 @@ def admin_dashboard():
             tipo_anexo = st.text_input("Tipo de anexo", key="tipo_anexo_poliza")
 
             if st.button("Crear Póliza", key="crear_poliza_btn"):
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
-                if "ejecutivo_comercial_id" not in existing_columns:
-                    cursor.execute("ALTER TABLE polizas ADD COLUMN ejecutivo_comercial_id INTEGER")
-                try:
-                    cursor.execute("""
-                        INSERT INTO polizas (
-                            numero_poliza, cliente_id, usuario_id, aseguradora_id, ramo_id, tipo_poliza, cobertura, prima,
-                            fecha_inicio, fecha_fin, estado, fecha_emision, suma_asegurada, deducible, sucursal,
-                            tipo_facturacion, linea_negocio, numero_factura, numero_anexo, tipo_anexo, ejecutivo_comercial_id
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        numero_poliza,
-                        cliente_seleccionado[0],
-                        usuario_seleccionado[0],
-                        aseguradora_seleccionada[0],
-                        ramo_seleccionado[0],
-                        tipo_poliza,
-                        cobertura,
-                        prima,
-                        fecha_inicio_vigencia.strftime("%Y-%m-%d"),
-                        fecha_fin_vigencia.strftime("%Y-%m-%d"),
-                        estado,
-                        fecha_emision.strftime("%Y-%m-%d"),
-                        suma_asegurada,
-                        deducible,
-                        sucursal,
-                        tipo_facturacion,
-                        linea_negocio,
-                        numero_factura,
-                        numero_anexo,
-                        tipo_anexo,
-                        ejecutivo_comercial_seleccionado[0] if ejecutivo_comercial_seleccionado else None
-                    ))
-                    conn.commit()
-                    st.success("Póliza creada exitosamente")
-                    st.experimental_rerun()
-                except sqlite3.IntegrityError:
-                    st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
-                finally:
-                    conn.close()
+                if not (cliente_seleccionado and usuario_seleccionado and aseguradora_seleccionada and ramo_seleccionado):
+                    st.error("Debe seleccionar Cliente, Gestor, Aseguradora y Ramo de Seguros.")
+                else:
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
+                    if "ejecutivo_comercial_id" not in existing_columns:
+                        cursor.execute("ALTER TABLE polizas ADD COLUMN ejecutivo_comercial_id INTEGER")
+                    try:
+                        cursor.execute("""
+                            INSERT INTO polizas (
+                                numero_poliza, cliente_id, usuario_id, aseguradora_id, ramo_id, tipo_poliza, cobertura, prima,
+                                fecha_inicio, fecha_fin, estado, fecha_emision, suma_asegurada, deducible, sucursal,
+                                tipo_facturacion, linea_negocio, numero_factura, numero_anexo, tipo_anexo, ejecutivo_comercial_id
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            numero_poliza,
+                            cliente_seleccionado[0],
+                            usuario_seleccionado[0],
+                            aseguradora_seleccionada[0],
+                            ramo_seleccionado[0],
+                            tipo_poliza,
+                            cobertura,
+                            prima,
+                            fecha_inicio_vigencia.strftime("%Y-%m-%d"),
+                            fecha_fin_vigencia.strftime("%Y-%m-%d"),
+                            estado,
+                            fecha_emision.strftime("%Y-%m-%d"),
+                            suma_asegurada,
+                            deducible,
+                            sucursal,
+                            tipo_facturacion,
+                            linea_negocio,
+                            numero_factura,
+                            numero_anexo,
+                            tipo_anexo,
+                            ejecutivo_comercial_seleccionado[0] if ejecutivo_comercial_seleccionado else None
+                        ))
+                        conn.commit()
+                        st.success("Póliza creada exitosamente")
+                        st.experimental_rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
+                    finally:
+                        conn.close()
 
         elif operation == "Leer":
             conn = sqlite3.connect(DB_FILE)
@@ -990,6 +1018,7 @@ def admin_dashboard():
 
     # Botón de Logout
     if st.sidebar.button("Logout"):
-        del st.session_state["token"]  # Eliminar el token de la sesión
+        if "token" in st.session_state:
+            del st.session_state["token"]  # Eliminar el token de la sesión
         st.success("Sesión cerrada exitosamente")
         st.rerun()  # Recargar la página para volver al login

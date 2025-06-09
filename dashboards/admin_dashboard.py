@@ -1107,43 +1107,64 @@ def admin_dashboard():
 
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
-            cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
-            clientes = cursor.fetchall()
+            # Cambia aquí: construye la lista de clientes con label adecuado según tipo_cliente
+            cursor.execute("SELECT id, nombres, apellidos, razon_social, tipo_cliente FROM clients")
+            clientes_raw = cursor.fetchall()
+            clientes = []
+            for c in clientes_raw:
+                if c[4] == "Empresa" and c[3]:
+                    label = f"{c[3]} (Empresa)"
+                else:
+                    label = f"{(c[1] or '').strip()} {(c[2] or '').strip()}".strip() or "Sin nombre"
+                clientes.append((c[0], label))
             cursor.execute("SELECT id, username FROM users")
             usuarios = cursor.fetchall()
             cursor.execute("SELECT id, razon_social FROM aseguradoras")
             aseguradoras = cursor.fetchall()
             cursor.execute("SELECT id, nombre FROM ramos_seguros")
             ramos_seguros = cursor.fetchall()
-            # Obtener ejecutivos comerciales (asegúrate de que este campo existe en la base de datos)
             cursor.execute("SELECT id, username FROM users WHERE lower(role) IN ('ejecutivo comercial', 'ejecutivo_comercial', 'ejecutivocomercial', 'seller')")
             ejecutivos_comerciales = cursor.fetchall()
             conn.close()
 
-            # --- SOLUCIÓN COMPATIBLE PARA PRODUCCIÓN ---
-            # Streamlit Cloud puede tener problemas con tuplas y format_func, así que usa solo listas de strings para las opciones
             def safe_label(x):
-                if isinstance(x, (list, tuple)):
-                    return str(x[1]) if len(x) > 1 else str(x[0])
+                if x is None:
+                    return "N/A"
+                if isinstance(x, (list, tuple)) and len(x) > 1:
+                    return str(x[1])
                 return str(x)
 
-            # Crea un mapeo de label a id para cada selectbox
-            clientes_labels = [safe_label(c) for c in clientes]
-            clientes_map = {label: c[0] for label, c in zip(clientes_labels, clientes)}
-            usuarios_labels = [safe_label(u) for u in usuarios]
-            usuarios_map = {label: u[0] for label, u in zip(usuarios_labels, usuarios)}
-            aseguradoras_labels = [safe_label(a) for a in aseguradoras]
-            aseguradoras_map = {label: a[0] for label, a in zip(aseguradoras_labels, aseguradoras)}
-            ramos_labels = [safe_label(r) for r in ramos_seguros]
-            ramos_map = {label: r[0] for label, r in zip(ramos_labels, ramos_seguros)}
-            ejecutivos_labels = [safe_label(e) for e in ejecutivos_comerciales]
-            ejecutivos_map = {label: e[0] for label, e in zip(ejecutivos_labels, ejecutivos_comerciales)}
+            # Selección de cliente y guardar la tupla seleccionada
+            if clientes:
+                cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=safe_label, key="cliente_poliza")
+            else:
+                st.warning("No hay clientes registrados. Por favor, registre un cliente antes de crear una póliza.")
+                cliente_seleccionado = None
 
-            cliente_label = st.selectbox("Selecciona un Cliente", clientes_labels) if clientes_labels else None
-            usuario_label = st.selectbox("Selecciona un Gestor", usuarios_labels) if usuarios_labels else None
-            aseguradora_label = st.selectbox("Selecciona una Aseguradora", aseguradoras_labels) if aseguradoras_labels else None
-            ramo_label = st.selectbox("Selecciona un Ramo de Seguros", ramos_labels) if ramos_labels else None
-            ejecutivo_label = st.selectbox("Selecciona un Ejecutivo Comercial", ejecutivos_labels) if ejecutivos_labels else None
+            if usuarios:
+                usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=safe_label, key="gestor_poliza")
+            else:
+                usuario_seleccionado = None
+
+            if aseguradoras:
+                aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=safe_label, key="aseguradora_poliza")
+            else:
+                aseguradora_seleccionada = None
+
+            if ramos_seguros:
+                ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=safe_label, key="ramo_poliza")
+            else:
+                ramo_seleccionado = None
+
+            if ejecutivos_comerciales:
+                ejecutivo_comercial_seleccionado = st.selectbox(
+                    "Selecciona un Ejecutivo Comercial",
+                    ejecutivos_comerciales,
+                    format_func=safe_label,
+                    key="ejecutivo_comercial_poliza"
+                )
+            else:
+                ejecutivo_comercial_seleccionado = None
 
             tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"], key="tipo_poliza")
             cobertura = st.text_area("Cobertura", key="cobertura_poliza")
@@ -1161,9 +1182,9 @@ def admin_dashboard():
             numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)", key="numero_anexo_poliza")
             tipo_anexo = st.text_input("Tipo de anexo", key="tipo_anexo_poliza")
 
+            # Cambia aquí: usa las variables *_seleccionado en la validación y el insert
             if st.button("Crear Póliza", key="crear_poliza_btn"):
-                # Validación de selección
-                if not (cliente_label and usuario_label and aseguradora_label and ramo_label):
+                if not (cliente_seleccionado and usuario_seleccionado and aseguradora_seleccionada and ramo_seleccionado):
                     st.error("Debe seleccionar Cliente, Gestor, Aseguradora y Ramo de Seguros.")
                 else:
                     conn = sqlite3.connect(DB_FILE)
@@ -1181,10 +1202,10 @@ def admin_dashboard():
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             numero_poliza,
-                            clientes_map.get(cliente_label),
-                            usuarios_map.get(usuario_label),
-                            aseguradoras_map.get(aseguradora_label),
-                            ramos_map.get(ramo_label),
+                            cliente_seleccionado[0],
+                            usuario_seleccionado[0],
+                            aseguradora_seleccionada[0],
+                            ramo_seleccionado[0],
                             tipo_poliza,
                             cobertura,
                             prima,
@@ -1200,11 +1221,11 @@ def admin_dashboard():
                             numero_factura,
                             numero_anexo,
                             tipo_anexo,
-                            ejecutivos_map.get(ejecutivo_label) if ejecutivo_label else None
+                            ejecutivo_comercial_seleccionado[0] if ejecutivo_comercial_seleccionado else None
                         ))
                         conn.commit()
                         st.success("Póliza creada exitosamente")
-                        st.experimental_rerun()
+                        st.rerun()
                     except sqlite3.IntegrityError:
                         st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
                     finally:
@@ -1490,7 +1511,7 @@ def admin_dashboard():
                         identificacion,
                         razon_social,
                         nombre_comercial,
-                        pais,
+                                               pais,
                         representante_legal,
                         aniversario,
                         web,

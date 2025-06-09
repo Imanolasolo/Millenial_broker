@@ -1104,63 +1104,111 @@ def admin_dashboard():
 
         if operation == "Crear":
             numero_poliza = st.text_input("Número de Póliza")
+
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("SELECT id, nombres || ' ' || apellidos AS nombre_completo FROM clients")
             clientes = cursor.fetchall()
-            cursor.execute("SELECT id, username, role FROM users")
-            usuarios_roles = cursor.fetchall()
+            cursor.execute("SELECT id, username FROM users")
+            usuarios = cursor.fetchall()
             cursor.execute("SELECT id, razon_social FROM aseguradoras")
             aseguradoras = cursor.fetchall()
             cursor.execute("SELECT id, nombre FROM ramos_seguros")
             ramos_seguros = cursor.fetchall()
+            # Obtener ejecutivos comerciales (asegúrate de que este campo existe en la base de datos)
+            cursor.execute("SELECT id, username FROM users WHERE lower(role) IN ('ejecutivo comercial', 'ejecutivo_comercial', 'ejecutivocomercial', 'seller')")
+            ejecutivos_comerciales = cursor.fetchall()
             conn.close()
-            usuarios = [(u[0], u[1]) for u in usuarios_roles]
-            ejecutivos_comerciales = [(u[0], u[1]) for u in usuarios_roles if u[2] and u[2].strip().lower().replace(" ", "_") in ["ejecutivo_comercial", "seller"]]
-            cliente_seleccionado = st.selectbox("Selecciona un Cliente", clientes, format_func=lambda x: x[1])
-            usuario_seleccionado = st.selectbox("Selecciona un Gestor", usuarios, format_func=lambda x: x[1])
-            aseguradora_seleccionada = st.selectbox("Selecciona una Aseguradora", aseguradoras, format_func=lambda x: x[1])
-            ramo_seleccionado = st.selectbox("Selecciona un Ramo de Seguros", ramos_seguros, format_func=lambda x: x[1])
-            ejecutivo_comercial_seleccionado = st.selectbox(
-                "Selecciona un Ejecutivo Comercial",
-                ejecutivos_comerciales if ejecutivos_comerciales else [("", "No hay ejecutivos comerciales")],
-                format_func=lambda x: x[1] if x and x[1] else "No hay ejecutivos comerciales"
-            )
-            tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"])
-            cobertura = st.text_area("Cobertura")
-            prima = st.text_input("Prima")
-            fecha_inicio_vigencia = st.date_input("Fecha de Inicio Vigencia")
-            fecha_fin_vigencia = st.date_input("Fecha de Fin Vigencia")
-            estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"])
-            fecha_emision = st.date_input("Fecha de emisión")
-            linea_negocio = st.text_input("Línea de negocio")
-            suma_asegurada = st.text_input("Suma Asegurada")
-            deducible = st.text_input("Deducible")
-            sucursal = st.text_input("Sucursal")
-            tipo_facturacion = st.selectbox("Tipo de Facturación", ["Contado", "Débito", "Cuota Directa"])
-            numero_factura = st.text_input("Nº de factura")
-            numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)")
-            tipo_anexo = st.text_input("Tipo de anexo")
-            if st.button("Crear Póliza"):
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                try:
-                    cursor.execute("""
-                        INSERT INTO polizas (numero_poliza, cliente_id, usuario_id, aseguradora_id, ramo_id, tipo_poliza, cobertura, prima, fecha_inicio, fecha_fin, estado, fecha_emision, suma_asegurada, deducible, sucursal, tipo_facturacion, linea_negocio, numero_factura, numero_anexo, tipo_anexo, ejecutivo_comercial_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        numero_poliza, cliente_seleccionado[0], usuario_seleccionado[0], aseguradora_seleccionada[0], ramo_seleccionado[0],
-                        tipo_poliza, cobertura, prima,
-                        fecha_inicio_vigencia.strftime("%Y-%m-%d"),
-                        fecha_fin_vigencia.strftime("%Y-%m-%d"),
-                        estado, fecha_emision.strftime("%Y-%m-%d"), suma_asegurada, deducible, sucursal, tipo_facturacion, linea_negocio, numero_factura, numero_anexo, tipo_anexo, ejecutivo_comercial_seleccionado[0]
-                    ))
-                    conn.commit()
-                    st.success("Póliza creada exitosamente")
-                except sqlite3.IntegrityError:
-                    st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
-                finally:
-                    conn.close()
+
+            # --- SOLUCIÓN COMPATIBLE PARA PRODUCCIÓN ---
+            # Streamlit Cloud puede tener problemas con tuplas y format_func, así que usa solo listas de strings para las opciones
+            def safe_label(x):
+                if isinstance(x, (list, tuple)):
+                    return str(x[1]) if len(x) > 1 else str(x[0])
+                return str(x)
+
+            # Crea un mapeo de label a id para cada selectbox
+            clientes_labels = [safe_label(c) for c in clientes]
+            clientes_map = {label: c[0] for label, c in zip(clientes_labels, clientes)}
+            usuarios_labels = [safe_label(u) for u in usuarios]
+            usuarios_map = {label: u[0] for label, u in zip(usuarios_labels, usuarios)}
+            aseguradoras_labels = [safe_label(a) for a in aseguradoras]
+            aseguradoras_map = {label: a[0] for label, a in zip(aseguradoras_labels, aseguradoras)}
+            ramos_labels = [safe_label(r) for r in ramos_seguros]
+            ramos_map = {label: r[0] for label, r in zip(ramos_labels, ramos_seguros)}
+            ejecutivos_labels = [safe_label(e) for e in ejecutivos_comerciales]
+            ejecutivos_map = {label: e[0] for label, e in zip(ejecutivos_labels, ejecutivos_comerciales)}
+
+            cliente_label = st.selectbox("Selecciona un Cliente", clientes_labels) if clientes_labels else None
+            usuario_label = st.selectbox("Selecciona un Gestor", usuarios_labels) if usuarios_labels else None
+            aseguradora_label = st.selectbox("Selecciona una Aseguradora", aseguradoras_labels) if aseguradoras_labels else None
+            ramo_label = st.selectbox("Selecciona un Ramo de Seguros", ramos_labels) if ramos_labels else None
+            ejecutivo_label = st.selectbox("Selecciona un Ejecutivo Comercial", ejecutivos_labels) if ejecutivos_labels else None
+
+            tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"], key="tipo_poliza")
+            cobertura = st.text_area("Cobertura", key="cobertura_poliza")
+            prima = st.text_input("Prima", key="prima_poliza")
+            fecha_inicio_vigencia = st.date_input("Fecha de Inicio Vigencia", key="fecha_inicio_poliza")
+            fecha_fin_vigencia = st.date_input("Fecha de Fin Vigencia", key="fecha_fin_poliza")
+            estado = st.selectbox("Estado", ["Activa", "Inactiva", "Cancelada"], key="estado_poliza")
+            fecha_emision = st.date_input("Fecha de emisión", key="fecha_emision_poliza")
+            linea_negocio = st.text_input("Línea de negocio", key="linea_negocio_poliza")
+            suma_asegurada = st.text_input("Suma Asegurada", key="suma_asegurada_poliza")
+            deducible = st.text_input("Deducible", key="deducible_poliza")
+            sucursal = st.text_input("Sucursal", key="sucursal_poliza")
+            tipo_facturacion = st.selectbox("Tipo de Facturación", ["Contado", "Débito", "Cuota Directa"], key="tipo_facturacion_poliza")
+            numero_factura = st.text_input("Nº de factura", key="numero_factura_poliza")
+            numero_anexo = st.text_area("Nº de Anexo (puedes ingresar varios separados por coma o salto de línea)", key="numero_anexo_poliza")
+            tipo_anexo = st.text_input("Tipo de anexo", key="tipo_anexo_poliza")
+
+            if st.button("Crear Póliza", key="crear_poliza_btn"):
+                # Validación de selección
+                if not (cliente_label and usuario_label and aseguradora_label and ramo_label):
+                    st.error("Debe seleccionar Cliente, Gestor, Aseguradora y Ramo de Seguros.")
+                else:
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(polizas)").fetchall()]
+                    if "ejecutivo_comercial_id" not in existing_columns:
+                        cursor.execute("ALTER TABLE polizas ADD COLUMN ejecutivo_comercial_id INTEGER")
+                    try:
+                        cursor.execute("""
+                            INSERT INTO polizas (
+                                numero_poliza, cliente_id, usuario_id, aseguradora_id, ramo_id, tipo_poliza, cobertura, prima,
+                                fecha_inicio, fecha_fin, estado, fecha_emision, suma_asegurada, deducible, sucursal,
+                                tipo_facturacion, linea_negocio, numero_factura, numero_anexo, tipo_anexo, ejecutivo_comercial_id
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            numero_poliza,
+                            clientes_map.get(cliente_label),
+                            usuarios_map.get(usuario_label),
+                            aseguradoras_map.get(aseguradora_label),
+                            ramos_map.get(ramo_label),
+                            tipo_poliza,
+                            cobertura,
+                            prima,
+                            fecha_inicio_vigencia.strftime("%Y-%m-%d"),
+                            fecha_fin_vigencia.strftime("%Y-%m-%d"),
+                            estado,
+                            fecha_emision.strftime("%Y-%m-%d"),
+                            suma_asegurada,
+                            deducible,
+                            sucursal,
+                            tipo_facturacion,
+                            linea_negocio,
+                            numero_factura,
+                            numero_anexo,
+                            tipo_anexo,
+                            ejecutivos_map.get(ejecutivo_label) if ejecutivo_label else None
+                        ))
+                        conn.commit()
+                        st.success("Póliza creada exitosamente")
+                        st.experimental_rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("El número de póliza ya existe o los datos seleccionados no son válidos.")
+                    finally:
+                        conn.close()
 
         elif operation == "Leer":
             conn = sqlite3.connect(DB_FILE)

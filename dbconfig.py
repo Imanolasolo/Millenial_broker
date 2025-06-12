@@ -85,14 +85,16 @@ def initialize_database():
         cursor.execute("ALTER TABLE clients ADD COLUMN tipo_empresa_categoria TEXT")
     if "tipo_persona_juridica" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN tipo_persona_juridica TEXT")
-    if "subactividad_economica" not in columns:
-        cursor.execute("ALTER TABLE clients ADD COLUMN subactividad_economica TEXT")
     if "pagina_web" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN pagina_web TEXT")
     if "fecha_aniversario" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN fecha_aniversario TEXT")
     if "contacto_autorizado_id" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN contacto_autorizado_id TEXT")
+    if "actividad_economica" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN actividad_economica TEXT")
+    if "subactividad_economica" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN subactividad_economica TEXT")
     conn.commit()
     print("Clients table ensured.")
 

@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import bcrypt
+import streamlit as st
 from dbconfig import DB_FILE
 from database_config import initialize_database, reset_database
 
@@ -114,3 +115,86 @@ def get_user_details(username):
         return None
     finally:
         conn.close()
+
+def crud_usuarios():
+    st.subheader("Gestión de Usuarios")
+    operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
+
+    if operation == "Crear":
+        st.header("Crear Usuario")
+        username = st.text_input("Nombre de usuario")
+        password = st.text_input("Contraseña", type="password")
+        nombres = st.text_input("Nombres")
+        apellidos = st.text_input("Apellidos")
+        company_id = st.text_input("ID de la compañía (opcional)")
+        if st.button("Crear Usuario"):
+            result = create_user(
+                username=username,
+                password=password,
+                nombres=nombres,
+                apellidos=apellidos,
+                company_id=company_id if company_id else None
+            )
+            st.success(result)
+
+    elif operation == "Leer":
+        st.header("Usuarios")
+        users = read_users()
+        for user in users:
+            st.write(f"{user['username']} - {user['nombres']} {user['apellidos']} - {user['company_name'] or 'Sin afiliación'}")
+
+    elif operation == "Modificar":
+        st.header("Modificar Usuario")
+        users = read_users()
+        if not users:
+            st.info("No hay usuarios registrados.")
+            return
+
+        # Construir opciones para el selectbox
+        user_options = []
+        for user in users:
+            label = f"{user.get('username', '')} ({user.get('role', 'Sin rol')})"
+            user_options.append((user.get('username', ''), label))
+
+        selected = st.selectbox("Selecciona un usuario para modificar", user_options, format_func=lambda x: x[1] if x else "")
+        selected_username = selected[0] if selected else None
+        selected_user = next((u for u in users if u.get('username') == selected_username), None)
+
+        if selected_user:
+            nuevos_nombres = st.text_input("Nuevos nombres", value=selected_user.get("nombres", ""))
+            nuevos_apellidos = st.text_input("Nuevos apellidos", value=selected_user.get("apellidos", ""))
+            nueva_contrasena = st.text_input("Nueva contraseña", type="password")
+            if st.button("Actualizar Usuario"):
+                updates = {
+                    "nombres": nuevos_nombres,
+                    "apellidos": nuevos_apellidos,
+                }
+                if nueva_contrasena:
+                    updates["password"] = nueva_contrasena
+                result = update_user(selected_username, **updates)
+                st.success(result)
+        else:
+            st.warning("Usuario no encontrado.")
+
+    elif operation == "Borrar":
+        st.header("Borrar Usuario")
+        users = read_users()
+        if not users:
+            st.info("No hay usuarios registrados.")
+            return
+
+        # Construir opciones para el selectbox
+        user_options = []
+        for user in users:
+            label = f"{user.get('username', '')} ({user.get('role', 'Sin rol')})"
+            user_options.append((user.get('username', ''), label))
+
+        selected = st.selectbox("Selecciona un usuario para eliminar", user_options, format_func=lambda x: x[1] if x else "")
+        selected_username = selected[0] if selected else None
+
+        if st.button("Eliminar Usuario"):
+            if selected_username:
+                result = delete_user(selected_username)
+                st.success(result)
+            else:
+                st.warning("Debes seleccionar un usuario para eliminar.")

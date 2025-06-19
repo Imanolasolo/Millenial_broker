@@ -92,7 +92,7 @@ def reset_database():
 
 def crud_clientes():
     st.subheader("Gestión de Clientes")
-    operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"])
+    operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"], key="crud_clientes_operation")
 
     if operation == "Crear":
         tipo_cliente = st.selectbox("Tipo de Cliente", ["Individual", "Empresa"])
@@ -138,36 +138,49 @@ def crud_clientes():
                 if correo_electronico and not re.match(email_pattern, correo_electronico):
                     st.error("El correo electrónico no tiene un formato válido.")
                 with col2:
-                    telefono_movil = st.text_input("Teléfono Móvil")
+                    telefono1 = st.text_input("Teléfono 1")
                 with col3:
-                    telefono_fijo = st.text_input("Teléfono Fijo")
+                    telefono2 = st.text_input("Teléfono 2")
                 phone_pattern = r"^\+593\d{9}$"
-                if telefono_movil and not re.match(phone_pattern, telefono_movil):
-                    st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
-                if telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
-                    st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
-                direccion_domicilio = st.text_area("Dirección de Domicilio")
+                if telefono1 and not re.match(phone_pattern, telefono1):
+                    st.error("El Teléfono 1 debe tener el formato internacional +593XXXXXXXXX")
+                if telefono2 and telefono2.strip() and not re.match(phone_pattern, telefono2):
+                    st.error("El Teléfono 2 debe tener el formato internacional +593XXXXXXXXX")
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    provincia = st.text_input("Provincia")
+                    provincias_ecuador = [
+                        "Azuay", "Bolívar", "Cañar", "Carchi", "Chimborazo", "Cotopaxi", "El Oro", "Esmeraldas",
+                        "Galápagos", "Guayas", "Imbabura", "Loja", "Los Ríos", "Manabí", "Morona Santiago",
+                        "Napo", "Orellana", "Pastaza", "Pichincha", "Santa Elena", "Santo Domingo de los Tsáchilas",
+                        "Sucumbíos", "Tungurahua", "Zamora Chinchipe"
+                    ]
+                    provincia_ecuador = st.selectbox("Provincia (en caso de Ciudadano o residente ecuatoriano)", provincias_ecuador)
                 with col2:
-                    ciudad = st.text_input("Ciudad")
+                    provincia_extranjero = st.text_input("Provincia (en caso de extranjero con Pasaporte)")
                 with col3:
-                    codigo_postal = st.text_input("Código Postal")
+                    ciudad = st.text_input("Ciudad")
+                direccion_domicilio = st.text_area("Dirección de Domicilio")
                 col1, col2 = st.columns(2)
+               
                 with col1:
                     actividad_economica = st.text_input("Actividad Económica")
                 with col2:
                     subactividad_economica = st.text_input("Subactividad Económica")
-                fecha_registro = st.date_input("Fecha de Registro")
-                ultima_actualizacion = st.date_input("Última Actualización")
-                pagina_web = st.text_input("Página web")
-                url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
-                if pagina_web and not re.match(url_pattern, pagina_web):
-                    st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
+                col1,col2 = st.columns(2)
+                with col1:
+                    fecha_registro = st.date_input("Fecha de Registro")
+                with col2:
+                    ultima_actualizacion = st.date_input("Última Actualización")
+                # Página web eliminada para cliente individual
+                # fecha_aniversario eliminada para cliente individual
+                # fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
                 submitted = st.form_submit_button("Crear Cliente")
                 if submitted:
+                    provincia = ""
+                    if tipo_documento == "Cédula":
+                        provincia = provincia_ecuador
+                    elif tipo_documento == "Pasaporte":
+                        provincia = provincia_extranjero if provincia_extranjero.strip() else "Extranjero"
                     if (nombres and len(nombres) > 50) or (apellidos and len(apellidos) > 50):
                         st.error("El campo 'Nombres' y/o 'Apellidos' no puede exceder 50 caracteres.")
                     elif tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
@@ -176,12 +189,10 @@ def crud_clientes():
                         st.error("La fecha de nacimiento no puede ser mayor que hoy.")
                     elif correo_electronico and not re.match(email_pattern, correo_electronico):
                         st.error("El correo electrónico no tiene un formato válido.")
-                    elif telefono_movil and not re.match(phone_pattern, telefono_movil):
-                        st.error("El Teléfono Móvil debe tener el formato internacional +593XXXXXXXXX")
-                    elif telefono_fijo and telefono_fijo.strip() and not re.match(phone_pattern, telefono_fijo):
-                        st.error("El Teléfono Fijo debe tener el formato internacional +593XXXXXXXXX")
-                    elif pagina_web and not re.match(url_pattern, pagina_web):
-                        st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
+                    elif telefono1 and not re.match(phone_pattern, telefono1):
+                        st.error("El Teléfono 1 debe tener el formato internacional +593XXXXXXXXX")
+                    elif telefono2 and telefono2.strip() and not re.match(phone_pattern, telefono2):
+                        st.error("El Teléfono 2 debe tener el formato internacional +593XXXXXXXXX")
                     elif nombres and apellidos and numero_documento and correo_electronico:
                         result = create_client(
                             tipo_cliente=tipo_cliente,
@@ -195,12 +206,15 @@ def crud_clientes():
                             sexo=genero,
                             estado_civil=estado_civil,
                             correo_electronico=correo_electronico,
-                            telefono_movil=telefono_movil,
-                            telefono_fijo=telefono_fijo,
+                            telefono_movil=telefono1,
+                            telefono_fijo=telefono2,
                             direccion_domicilio=direccion_domicilio,
                             provincia=provincia,
+                            provincia_ecuador=provincia_ecuador,
+                            provincia_extranjero=provincia_extranjero,
                             ciudad=ciudad,
-                            codigo_postal=codigo_postal,
+                            # codigo_postal eliminado
+                            # codigo_postal=codigo_postal,
                             actividad_economica=actividad_economica,
                             subactividad_economica=subactividad_economica,
                             ocupacion_profesion=None,
@@ -222,8 +236,8 @@ def crud_clientes():
                             notas_adicionales=None,
                             fecha_registro=fecha_registro.strftime("%Y-%m-%d"),
                             ultima_actualizacion=ultima_actualizacion.strftime("%Y-%m-%d"),
-                            pagina_web=pagina_web,
-                            fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
+                            # pagina_web=pagina_web,  # Eliminado para individual
+                            # fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None, # Eliminado para individual
                             contacto_autorizado_id=None
                         )
                         st.success(result)
@@ -250,15 +264,29 @@ def crud_clientes():
                 if contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
                     st.warning("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
                 col1, col2 = st.columns(2)
-                with col1:
-                    correo_electronico = st.text_input("Correo Electrónico Contacto")
                 with col2:
+                    correo_electronico = st.text_input("Correo Electrónico Contacto")
+                with col1:
                     correo_empresa = st.text_input("Correo Empresa")
                 email_pattern = r"^[^@]+@[^@]+\.[^@]+$"
                 if correo_electronico and not re.match(email_pattern, correo_electronico):
                     st.error("El correo electrónico de contacto no tiene un formato válido.")
                 if correo_empresa and not re.match(email_pattern, correo_empresa):
                     st.error("El correo empresa no tiene un formato válido.")
+                # Teléfonos: Teléfono 1 y Teléfono 2
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    telefono1 = st.text_input("Teléfono 1")
+                with col2:
+                    telefono2 = st.text_input("Teléfono 2")
+                phone_pattern = r"^\+593\d{9}$"
+                if telefono1 and not re.match(phone_pattern, telefono1):
+                    st.error("El Teléfono 1 debe tener el formato internacional +593XXXXXXXXX")
+                if telefono2 and telefono2.strip() and not re.match(phone_pattern, telefono2):
+                    st.error("El Teléfono 2 debe tener el formato internacional +593XXXXXXXXX")
+                with col3:
+                    pagina_web = st.text_input("Página web")
+                direccion_domicilio = st.text_area("Dirección de la Empresa")
                 col1,col2,col3 = st.columns(3)
                 with col1:
                     sector_mercado = st.selectbox(
@@ -295,9 +323,6 @@ def crud_clientes():
                     actividad_economica = st.text_input("Actividad Económica")
                 with col2:
                     subactividad_economica = st.text_input("Subactividad Económica")
-                telefono_fijo = st.text_input("Teléfono Fijo")
-                direccion_domicilio = st.text_area("Dirección de la Empresa")
-                pagina_web = st.text_input("Página web")
                 url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
                 if pagina_web and not re.match(url_pattern, pagina_web):
                     st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
@@ -312,6 +337,10 @@ def crud_clientes():
                         st.error("El ID Representante Legal debe tener exactamente 10 dígitos numéricos.")
                     elif contacto_autorizado_id and (not contacto_autorizado_id.isdigit() or len(contacto_autorizado_id) != 10):
                         st.error("El ID Contacto Autorizado debe tener exactamente 10 dígitos numéricos.")
+                    elif telefono1 and not re.match(phone_pattern, telefono1):
+                        st.error("El Teléfono 1 debe tener el formato internacional +593XXXXXXXXX")
+                    elif telefono2 and telefono2.strip() and not re.match(phone_pattern, telefono2):
+                        st.error("El Teléfono 2 debe tener el formato internacional +593XXXXXXXXX")
                     else:
                         result = create_client(
                             tipo_cliente=tipo_cliente,
@@ -331,7 +360,8 @@ def crud_clientes():
                             tipo_persona_juridica=tipo_persona_juridica,
                             actividad_economica=actividad_economica,
                             subactividad_economica=subactividad_economica,
-                            telefono_fijo=telefono_fijo,
+                            telefono_movil=telefono1,
+                            telefono_fijo=telefono2,
                             direccion_domicilio=direccion_domicilio,
                             pagina_web=pagina_web,
                             fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
@@ -403,17 +433,30 @@ def crud_clientes():
                     with col1:
                         correo_electronico = st.text_input("Correo Electrónico Contacto", value=selected_client.get("correo_electronico", ""))
                     with col2:
-                        telefono_movil = st.text_input("Teléfono Móvil", value=selected_client.get("telefono_movil", ""))
+                        telefono1 = st.text_input("Teléfono 1", value=selected_client.get("telefono_movil", ""))
                     with col3:
-                        telefono_fijo = st.text_input("Teléfono Fijo", value=selected_client.get("telefono_fijo", ""))
+                        telefono2 = st.text_input("Teléfono 2", value=selected_client.get("telefono_fijo", ""))
                     direccion_domicilio = st.text_area("Dirección de Domicilio", value=selected_client.get("direccion_domicilio", ""))
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        provincia = st.text_input("Provincia", value=selected_client.get("provincia", ""))
+                        provincias_ecuador = [
+                            "Azuay", "Bolívar", "Cañar", "Carchi", "Chimborazo", "Cotopaxi", "El Oro", "Esmeraldas",
+                            "Galápagos", "Guayas", "Imbabura", "Loja", "Los Ríos", "Manabí", "Morona Santiago",
+                            "Napo", "Orellana", "Pastaza", "Pichincha", "Santa Elena", "Santo Domingo de los Tsáchilas",
+                            "Sucumbíos", "Tungurahua", "Zamora Chinchipe"
+                        ]
+                        provincia_ecuador = st.selectbox(
+                            "Provincia (en caso de Ciudadano o residente ecuatoriano)",
+                            provincias_ecuador,
+                            index=provincias_ecuador.index(selected_client.get("provincia_ecuador", provincias_ecuador[0])) if selected_client.get("provincia_ecuador", "") in provincias_ecuador else 0
+                        )
                     with col2:
-                        ciudad = st.text_input("Ciudad", value=selected_client.get("ciudad", ""))
+                        provincia_extranjero = st.text_input(
+                            "Provincia (en caso de extranjero con Pasaporte)",
+                            value=selected_client.get("provincia_extranjera", "")
+                        )
                     with col3:
-                        codigo_postal = st.text_input("Código Postal", value=selected_client.get("codigo_postal", ""))
+                        ciudad = st.text_input("Ciudad", value=selected_client.get("ciudad", ""))
                     col1, col2 = st.columns(2)
                     with col1:
                         actividad_economica = st.text_input("Actividad Económica", value=selected_client.get("actividad_economica", ""))
@@ -421,10 +464,14 @@ def crud_clientes():
                         subactividad_economica = st.text_input("Subactividad Económica", value=selected_client.get("subactividad_economica", ""))
                     fecha_registro = st.date_input("Fecha de Registro", value=selected_client.get("fecha_registro", dt.date.today()))
                     ultima_actualizacion = st.date_input("Última Actualización", value=selected_client.get("ultima_actualizacion", dt.date.today()))
-                    pagina_web = st.text_input("Página web", value=selected_client.get("pagina_web", ""))
                     fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=selected_client.get("fecha_aniversario", dt.date.today()))
                     submitted = st.form_submit_button("Actualizar Cliente")
                     if submitted:
+                        provincia = ""
+                        if tipo_documento == "Cédula":
+                            provincia = provincia_ecuador
+                        elif tipo_documento == "Pasaporte":
+                            provincia = provincia_extranjero if provincia_extranjero.strip() else "Extranjero"
                         result = update_client(
                             selected_client.get("correo_electronico"),
                             tipo_cliente=tipo_cliente,
@@ -438,12 +485,15 @@ def crud_clientes():
                             sexo=genero,
                             estado_civil=estado_civil,
                             correo_electronico=correo_electronico,
-                            telefono_movil=telefono_movil,
-                            telefono_fijo=telefono_fijo,
+                            telefono_movil=telefono1,
+                            telefono_fijo=telefono2,
                             direccion_domicilio=direccion_domicilio,
                             provincia=provincia,
+                            provincia_ecuador=provincia_ecuador,
+                            provincia_extranjero=provincia_extranjero,
                             ciudad=ciudad,
-                            codigo_postal=codigo_postal,
+                            # codigo_postal eliminado
+                            # codigo_postal=codigo_postal,
                             actividad_economica=actividad_economica,
                             subactividad_economica=subactividad_economica,
                             ocupacion_profesion=None,
@@ -465,7 +515,7 @@ def crud_clientes():
                             notas_adicionales=None,
                             fecha_registro=fecha_registro.strftime("%Y-%m-%d"),
                             ultima_actualizacion=ultima_actualizacion.strftime("%Y-%m-%d"),
-                            pagina_web=pagina_web,
+                            # pagina_web=pagina_web,  # Eliminado para individual
                             fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
                             contacto_autorizado_id=None
                         )

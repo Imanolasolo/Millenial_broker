@@ -79,24 +79,58 @@ def authenticate(username, password):
 
 # Página de login y redirigir a dashboards
 def login_page():
-    col1, col2 = st.columns([1, 4])
+    col1, col2= st.columns([1, 4])
     with col1:
         st.image("assets/logo.png", width=100)
     with col2:
-        st.title("Bienvenidos al :orange[BCS] de :blue[MILLENNIAL BROKER] - Iniciar Sesión")
-    # --- CAMBIO: dropdown para usuarios ---
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users")
-    user_list = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    username = st.selectbox("Usuario", user_list) if user_list else st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
-    if st.button("Login"):
-        token = authenticate(username, password)
-        if token:
-            st.success("Autenticación exitosa!")
-            st.rerun()
+        st.title("Bienvenidos al :orange[BCS] de :blue[MILLENNIAL BROKER] ")
+    col1,col2,col3 = st.columns([2, 2, 2])
+    with col1:
+        st.image('assets/image1.png', width=200, )
+        with st.expander("¿Qué es el :orange[BCS] :blue[Millennial Broker]?"):
+            st.markdown("""
+            El **BCS Millennial Broker** es una plataforma integral para la gestión de *clientes*, *pólizas*, *aseguradoras*, *agencias* y *usuarios* del sector asegurador. Permite administrar y consultar información relevante de manera centralizada y segura.
+            """)
+    with col2:
+        st.image('assets/imagen2.jpg', width=200)
+        with st.expander("Iniciar Sesión como :orange[usuario]"):
+        # --- CAMBIO: dropdown para usuarios ---
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT username FROM users")
+            user_list = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            username = st.selectbox(":blue[Usuario]", user_list) if user_list else st.text_input("Usuario")
+            password = st.text_input(":blue[Contraseña]", type="password")
+            if st.button("Login"):
+                token = authenticate(username, password)
+                if token:
+                    st.success("Autenticación exitosa!")
+                    st.rerun()
+    with col3:
+        st.image('assets/image3.jpg', width=200)
+        with st.expander("Instrucciones de uso del :blue[BCS] :orange[Millennial Broker]"):
+            st.markdown("""
+            - Selecciona tu usuario y contraseña para acceder a tu dashboard personalizado.
+            - Navega por los módulos desde la barra lateral izquierda.
+            - Cada módulo cuenta con opciones para crear, leer, modificar y borrar registros.
+            - Utiliza los formularios y tablas para gestionar la información.
+            - Para cerrar sesión, utiliza el botón "Logout" en la barra lateral.
+            """)
+    # Footer
+    st.markdown("""
+        <hr style="margin-top:2em;margin-bottom:0.5em;">
+        <div style="text-align:center; font-size: 0.95em;">
+            Creado por <b>CodeCodix AI Lab @2025</b>
+        </div>
+        <div style="text-align:center; margin-top:0.5em;">
+            <a href="https://wa.me/5930993513082?text=Consulta%20t%C3%A9cnica%20BCS%20Millennial%20Broker" target="_blank">
+                <button style="background-color:#25D366; color:white; border:none; padding:8px 18px; border-radius:5px; font-size:1em; cursor:pointer;">
+                    Contacto con servicio técnico
+                </button>
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
 
 # Verificar sesión y redirigir a dashboards
 def main():

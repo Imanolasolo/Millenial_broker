@@ -85,16 +85,14 @@ def initialize_database():
         cursor.execute("ALTER TABLE clients ADD COLUMN tipo_empresa_categoria TEXT")
     if "tipo_persona_juridica" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN tipo_persona_juridica TEXT")
+    if "subactividad_economica" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN subactividad_economica TEXT")
     if "pagina_web" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN pagina_web TEXT")
     if "fecha_aniversario" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN fecha_aniversario TEXT")
     if "contacto_autorizado_id" not in columns:
         cursor.execute("ALTER TABLE clients ADD COLUMN contacto_autorizado_id TEXT")
-    if "actividad_economica" not in columns:
-        cursor.execute("ALTER TABLE clients ADD COLUMN actividad_economica TEXT")
-    if "subactividad_economica" not in columns:
-        cursor.execute("ALTER TABLE clients ADD COLUMN subactividad_economica TEXT")
     conn.commit()
     print("Clients table ensured.")
 
@@ -149,6 +147,29 @@ def initialize_database():
         )
     ''')
     print("Polizas table ensured.")
+
+    # Añadir columna observaciones si no existe
+    cursor.execute("PRAGMA table_info(polizas)")
+    polizas_columns = [row[1] for row in cursor.fetchall()]
+    if "observaciones" not in polizas_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN observaciones TEXT")
+        print("Added 'observaciones' column to polizas.")
+
+    # Crear tabla poliza_ramos si no existe
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS poliza_ramos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            poliza_id INTEGER NOT NULL,
+            nro_ramo INTEGER NOT NULL,
+            ramo_id INTEGER NOT NULL,
+            suma_asegurada TEXT,
+            prima TEXT,
+            observaciones TEXT,
+            FOREIGN KEY (poliza_id) REFERENCES polizas (id),
+            FOREIGN KEY (ramo_id) REFERENCES ramos_seguros (id)
+        )
+    ''')
+    print("Poliza_Ramos table ensured.")
 
     # Create companies table if it doesn't exist
     cursor.execute('''

@@ -5,6 +5,7 @@ from database_config import initialize_database, reset_database
 import streamlit as st
 import datetime as dt
 import re
+from assets.actividad_economica import actividad_economica_options
 
 # Update the create_client function to handle all fields
 def create_client(**data):
@@ -163,7 +164,8 @@ def crud_clientes():
                 col1, col2 = st.columns(2)
                
                 with col1:
-                    actividad_economica = st.text_input("Actividad Económica")
+                    # Cambiar a selectbox usando las opciones importadas
+                    actividad_economica = st.selectbox("Actividad Económica", actividad_economica_options)
                 with col2:
                     subactividad_economica = st.text_input("Subactividad Económica")
                 col1,col2 = st.columns(2)
@@ -320,13 +322,16 @@ def crud_clientes():
                     )
                 col1, col2 = st.columns(2)
                 with col1:
-                    actividad_economica = st.text_input("Actividad Económica")
+                    # Cambiar a selectbox usando las opciones importadas
+                    actividad_economica = st.selectbox("Actividad Económica", actividad_economica_options)
                 with col2:
                     subactividad_economica = st.text_input("Subactividad Económica")
-                url_pattern = r"^(https?://)?([\w\-]+\.)+[\w\-]+(/[\w\-./?%&=]*)?$"
-                if pagina_web and not re.match(url_pattern, pagina_web):
-                    st.error("La Página web debe tener formato URL válido (ej: https://www.ejemplo.com)")
-                fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=None)
+                col1, col2 = st.columns(2)
+                with col1:
+                    fecha_registro = st.date_input("Fecha de Registro")
+                with col2:
+                    ultima_actualizacion = st.date_input("Última Actualización")
+                # fecha_aniversario eliminada para cliente empresa
                 submitted = st.form_submit_button("Crear Cliente")
                 if submitted:
                     if not (razon_social and numero_documento and correo_electronico):
@@ -364,7 +369,7 @@ def crud_clientes():
                             telefono_fijo=telefono2,
                             direccion_domicilio=direccion_domicilio,
                             pagina_web=pagina_web,
-                            fecha_aniversario=fecha_aniversario.strftime("%Y-%m-%d") if fecha_aniversario else None,
+                            fecha_aniversario=None,
                             representante_legal_id=representante_legal_id,
                             contacto_autorizado_id=contacto_autorizado_id
                         )
@@ -459,12 +464,22 @@ def crud_clientes():
                         ciudad = st.text_input("Ciudad", value=selected_client.get("ciudad", ""))
                     col1, col2 = st.columns(2)
                     with col1:
-                        actividad_economica = st.text_input("Actividad Económica", value=selected_client.get("actividad_economica", ""))
+                        # Cambiar a selectbox usando las opciones importadas
+                        actividad_actual = selected_client.get("actividad_economica", actividad_economica_options[0])
+                        if actividad_actual in actividad_economica_options:
+                            actividad_index = actividad_economica_options.index(actividad_actual)
+                        else:
+                            actividad_index = 0
+                        actividad_economica = st.selectbox("Actividad Económica", actividad_economica_options, index=actividad_index)
                     with col2:
                         subactividad_economica = st.text_input("Subactividad Económica", value=selected_client.get("subactividad_economica", ""))
-                    fecha_registro = st.date_input("Fecha de Registro", value=selected_client.get("fecha_registro", dt.date.today()))
-                    ultima_actualizacion = st.date_input("Última Actualización", value=selected_client.get("ultima_actualizacion", dt.date.today()))
-                    fecha_aniversario = st.date_input("Fecha de Aniversario (opcional)", value=selected_client.get("fecha_aniversario", dt.date.today()))
+                    fecha_registro = st.date_input("Fecha de Registro", value=_parse_date(selected_client.get("fecha_registro")))
+                    ultima_actualizacion = st.date_input("Última Actualización", value=_parse_date(selected_client.get("ultima_actualizacion")))
+                    # Solución robusta para fecha_aniversario
+                    fecha_aniversario = st.date_input(
+                        "Fecha de Aniversario (opcional)",
+                        value=_parse_date(selected_client.get("fecha_aniversario"))
+                    )
                     submitted = st.form_submit_button("Actualizar Cliente")
                     if submitted:
                         provincia = ""
@@ -574,7 +589,13 @@ def crud_clientes():
                         )
                     col1, col2 = st.columns(2)
                     with col1:
-                        actividad_economica = st.text_input("Actividad Económica", value=selected_client.get("actividad_economica", ""))
+                        # Cambiar a selectbox usando las opciones importadas
+                        actividad_actual = selected_client.get("actividad_economica", actividad_economica_options[0])
+                        if actividad_actual in actividad_economica_options:
+                            actividad_index = actividad_economica_options.index(actividad_actual)
+                        else:
+                            actividad_index = 0
+                        actividad_economica = st.selectbox("Actividad Económica", actividad_economica_options, index=actividad_index)
                     with col2:
                         subactividad_economica = st.text_input("Subactividad Económica", value=selected_client.get("subactividad_economica", ""))
                     telefono_fijo = st.text_input("Teléfono Fijo", value=selected_client.get("telefono_fijo", ""))
@@ -635,3 +656,18 @@ def crud_clientes():
                 st.success(result)
             else:
                 st.warning("Debes seleccionar un cliente para eliminar.")
+
+# Añadir esta función utilitaria al principio del archivo (después de imports)
+def _parse_date(val):
+    import datetime
+    if not val:
+        return datetime.date.today()
+    if isinstance(val, datetime.date):
+        return val
+    try:
+        return datetime.datetime.strptime(val, "%Y-%m-%d").date()
+    except Exception:
+        try:
+            return datetime.datetime.fromisoformat(val).date()
+        except Exception:
+            return datetime.date.today()

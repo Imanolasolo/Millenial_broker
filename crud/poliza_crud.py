@@ -105,6 +105,32 @@ def crud_polizas():
     conn.close()
     poliza_fields = [col[1] for col in columns_info if col[1] != "id"]
 
+    # --- NUEVO: Añadir campos de facturación si no existen ---
+    fact_fields = [
+        ("numero_factura", "TEXT"),
+        ("moneda", "TEXT"),
+        ("clausulas_particulares", "TEXT"),
+        ("contrib_scvs", "TEXT"),
+        ("derechos_emision", "TEXT"),
+        ("ssoc_camp", "TEXT"),
+        ("subtotal", "TEXT"),
+        ("iva_15", "TEXT"),
+        ("csolidaria_2", "TEXT"),
+        ("financiacion", "TEXT"),
+        ("otros_iva", "TEXT"),
+        ("total", "TEXT"),
+        ("cuotas", "TEXT"),
+    ]
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(polizas)")
+    existing_cols = [row[1] for row in cursor.fetchall()]
+    for col, coltype in fact_fields:
+        if col not in existing_cols:
+            cursor.execute(f"ALTER TABLE polizas ADD COLUMN {col} {coltype}")
+    conn.commit()
+    conn.close()
+
     if operation == "Crear":
         if "poliza_form_step" not in st.session_state:
             st.session_state["poliza_form_step"] = 1
@@ -143,13 +169,13 @@ def crud_polizas():
                     estado_choices = ["Borrador", "Emitida", "Anulada", "Activa", "Pagada", "Pendiente de Pago"]
                     estado = st.selectbox("Estado póliza", estado_choices)
                 with col2:
-                # Tipo de póliza (nuevo campo obligatorio)
+                    # Tipo de póliza (nuevo campo obligatorio)
                     tipo_poliza = st.selectbox("Tipo de Póliza", ["Nueva", "Renovación"])
                 col1,col2 = st.columns(2)
                 # Cobertura
                 with col1:
                     cobertura = st.text_input("Cobertura de la póliza")  # Nuevo campo obligatorio
-                # Prima (nuevo campo obligatorio)
+                # Prima (nuevo campo obligatorio) - SOLO aquí, eliminar del paso de ramos
                 with col2:
                     prima = st.text_input("Prima total de la póliza")  # Nuevo campo obligatorio
                 # Observaciones
@@ -259,7 +285,8 @@ def crud_polizas():
                 ramos_options = get_ramos_options()
                 ramo_selected = st.selectbox("Tipo de Ramo", ramos_options, format_func=lambda x: x[1] if x else "")
                 suma_asegurada = st.text_input("Suma Asegurada")
-                prima = st.text_input("Prima")
+                # Eliminar campo prima aquí para evitar duplicidad
+                # prima = st.text_input("Prima")
                 observaciones_ramo = st.text_area("Observaciones")
                 agregar_ramo = st.form_submit_button("Agregar Ramo a la Póliza")
 
@@ -269,7 +296,7 @@ def crud_polizas():
                         "ramo_id": ramo_selected[0],
                         "ramo_nombre": ramo_selected[1],
                         "suma_asegurada": suma_asegurada,
-                        "prima": prima,
+                        # "prima": prima,  # Eliminar este campo
                         "observaciones": observaciones_ramo
                     }
                     st.session_state["ramos_list"].append(ramo_data)
@@ -281,9 +308,45 @@ def crud_polizas():
                 for ramo in st.session_state["ramos_list"]:
                     st.markdown(
                         f"- **Nº Ramo:** {ramo['nro_ramo']} | **Tipo:** {ramo['ramo_nombre']} | "
-                        f"**Suma Asegurada:** {ramo['suma_asegurada']} | **Prima:** {ramo['prima']} | "
+                        f"**Suma Asegurada:** {ramo['suma_asegurada']} | "
                         f"**Obs.:** {ramo['observaciones']}"
                     )
+
+            # --- Formulario de Datos para Facturación ---
+            with st.form("form_datos_facturacion"):
+                st.markdown("### Datos para facturación")
+                numero_factura = st.text_input("Nº Factura")
+                moneda = st.selectbox("Moneda", ["USD", "EUR", "Otra"])
+                clausulas_particulares = st.text_area("Cláusulas particulares")
+                contrib_scvs = st.text_input("Contrib. S.C.V.S.")
+                derechos_emision = st.text_input("Derechos Emisión")
+                ssoc_camp = st.text_input("S.Soc.Camp.")
+                subtotal = st.text_input("Subtotal")
+                iva_15 = st.text_input("IVA (15%)")
+                csolidaria_2 = st.text_input("C.Solidaria(2%)")
+                financiacion = st.text_input("Financiación")
+                otros_iva = st.text_input("Otros IVA")
+                total = st.text_input("Total")
+                cuotas = st.text_input("Cuotas")
+                guardar_fact = st.form_submit_button("Guardar datos de facturación")
+
+                if guardar_fact:
+                    st.session_state["facturacion_data"] = {
+                        "numero_factura": numero_factura,
+                        "moneda": moneda,
+                        "clausulas_particulares": clausulas_particulares,
+                        "contrib_scvs": contrib_scvs,
+                        "derechos_emision": derechos_emision,
+                        "ssoc_camp": ssoc_camp,
+                        "subtotal": subtotal,
+                        "iva_15": iva_15,
+                        "csolidaria_2": csolidaria_2,
+                        "financiacion": financiacion,
+                        "otros_iva": otros_iva,
+                        "total": total,
+                        "cuotas": cuotas
+                    }
+                    st.success("Datos de facturación guardados.")
 
             # Botón para crear la póliza borrador
             if st.button("Crear póliza borrador"):
@@ -291,30 +354,30 @@ def crud_polizas():
                 cursor = conn.cursor()
                 try:
                     poliza_data = st.session_state["poliza_form_data"]
-                    cobertura = poliza_data.get("cobertura", "")
-                    prima = poliza_data.get("prima", "")
-                    cursor.execute("""
-                        INSERT INTO polizas (
-                            numero_poliza, cliente_id, aseguradora_id, usuario_id, tipo_poliza, cobertura, prima, fecha_emision,
-                            fecha_inicio, fecha_fin, estado
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        poliza_data["numero_poliza"],
-                        poliza_data["cliente_id"],
-                        poliza_data["aseguradora_id"],
-                        poliza_data["usuario_id"],
-                        poliza_data["tipo_poliza"],
-                        cobertura,
-                        prima,
-                        poliza_data["fecha_emision"],
-                        poliza_data["fecha_inicio"],
-                        poliza_data["fecha_fin"],
-                        "Borrador"
-                    ))
+                    facturacion_data = st.session_state.get("facturacion_data", {})
+                    # Unir ambos diccionarios para el insert
+                    insert_data = {**poliza_data, **facturacion_data}
+                    # Asegurar que todos los campos existen en la tabla
+                    cursor.execute("PRAGMA table_info(polizas)")
+                    poliza_cols = [row[1] for row in cursor.fetchall() if row[1] != "id"]
+                    insert_fields = []
+                    insert_values = []
+                    for col in poliza_cols:
+                        insert_fields.append(col)
+                        insert_values.append(insert_data.get(col, ""))
+
+                    cursor.execute(
+                        f"INSERT INTO polizas ({', '.join(insert_fields)}) VALUES ({', '.join(['?']*len(insert_fields))})",
+                        insert_values
+                    )
                     poliza_id = cursor.lastrowid
 
-                    # Insertar los ramos asociados (si tienes tabla poliza_ramos, ajusta aquí)
+                    # Insertar los ramos asociados
                     for ramo in st.session_state["ramos_list"]:
+                        # Asegurarse de que suma_asegurada no sea None
+                        suma_asegurada = ramo.get("suma_asegurada", "")
+                        if suma_asegurada is None:
+                            suma_asegurada = ""
                         cursor.execute("""
                             INSERT INTO poliza_ramos (poliza_id, nro_ramo, ramo_id, suma_asegurada, prima, observaciones)
                             VALUES (?, ?, ?, ?, ?, ?)
@@ -322,8 +385,8 @@ def crud_polizas():
                             poliza_id,
                             ramo["nro_ramo"],
                             ramo["ramo_id"],
-                            ramo["suma_asegurada"],
-                            ramo["prima"],
+                            str(suma_asegurada),  # Asegura que se inserte como string
+                            "",  # Prima vacía, ya no se pide por ramo
                             ramo["observaciones"]
                         ))
                     conn.commit()
@@ -331,6 +394,7 @@ def crud_polizas():
                     st.session_state["poliza_form_step"] = 1
                     st.session_state["poliza_form_data"] = {}
                     st.session_state["ramos_list"] = []
+                    st.session_state["facturacion_data"] = {}
                 except Exception as e:
                     st.error(f"Error al crear la póliza: {e}")
                 finally:
@@ -339,66 +403,49 @@ def crud_polizas():
     elif operation == "Leer":
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        campos = [
-            "id", "numero_poliza", "cliente_id", "aseguradora_id", "usuario_id", "tipo_poliza",
-            "cobertura", "prima", "fecha_emision", "fecha_inicio", "fecha_fin", "estado", "observaciones"
-        ]
-        cursor.execute(f"SELECT {', '.join(campos)} FROM polizas")
+        # Obtener todos los campos de la tabla polizas
+        cursor.execute("PRAGMA table_info(polizas)")
+        all_fields = [row[1] for row in cursor.fetchall()]
+        cursor.execute(f"SELECT {', '.join(all_fields)} FROM polizas")
         polizas = cursor.fetchall()
+        # Obtener clientes para mostrar nombre/razón social
+        cursor.execute("SELECT id, tipo_cliente, nombres, apellidos, razon_social FROM clients")
+        clientes_dict = {row[0]: (row[4] if row[1] == "Empresa" else f"{row[2]} {row[3]}") for row in cursor.fetchall()}
+        # Obtener usuarios para mostrar username
+        cursor.execute("SELECT id, username FROM users")
+        usuarios_dict = {row[0]: row[1] for row in cursor.fetchall()}
+        # Obtener ramos asociados a cada póliza
+        cursor.execute("SELECT poliza_id, suma_asegurada FROM poliza_ramos")
+        ramos_por_poliza = {}
+        for poliza_id, suma_asegurada in cursor.fetchall():
+            if poliza_id not in ramos_por_poliza:
+                ramos_por_poliza[poliza_id] = []
+            ramos_por_poliza[poliza_id].append(suma_asegurada)
         conn.close()
         if polizas:
-            import pandas as pd
-            # Cargar datos de referencia para clientes, aseguradoras y usuarios
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            # Clientes
-            cursor.execute("SELECT id, tipo_cliente, nombres, apellidos, razon_social FROM clients")
-            clientes_dict = {row[0]: (row[4] if row[1] == "Empresa" else f"{row[2]} {row[3]}") for row in cursor.fetchall()}
-            # Aseguradoras
-            cursor.execute("SELECT id, razon_social FROM aseguradoras")
-            aseguradoras_dict = {row[0]: row[1] for row in cursor.fetchall()}
-            # Usuarios
-            cursor.execute("SELECT id, username FROM users")
-            usuarios_dict = {row[0]: row[1] for row in cursor.fetchall()}
-            # Beneficiarios (asegurado_id)
-            cursor.execute("PRAGMA table_info(polizas)")
-            polizas_columns = [row[1] for row in cursor.fetchall()]
-            tiene_asegurado = "asegurado_id" in polizas_columns
-            asegurados_dict = {}
-            if tiene_asegurado:
-                cursor.execute("SELECT id, tipo_cliente, nombres, apellidos, razon_social FROM clients")
-                asegurados_dict = {row[0]: (row[4] if row[1] == "Empresa" else f"{row[2]} {row[3]}") for row in cursor.fetchall()}
-            conn.close()
-
-            # Preparar los datos para mostrar
-            data = []
-            for row in polizas:
-                poliza = dict(zip(campos, row))
-                cliente = clientes_dict.get(poliza["cliente_id"], "")
-                aseguradora = aseguradoras_dict.get(poliza.get("aseguradora_id"), "")
-                usuario = usuarios_dict.get(poliza["usuario_id"], "")
-                beneficiario = ""
-                if tiene_asegurado:
-                    asegurado_id = poliza.get("asegurado_id")
-                    if asegurado_id and asegurado_id != poliza["cliente_id"]:
-                        beneficiario = asegurados_dict.get(asegurado_id, "")
-                data.append({
-                    "Número de Póliza": poliza["numero_poliza"],
-                    "Cliente": cliente,
-                    "Aseguradora": aseguradora,
-                    "Usuario": usuario,
-                    "Tipo de Póliza": poliza["tipo_poliza"],
-                    "Cobertura": poliza["cobertura"],
-                    "Prima": poliza["prima"],
-                    "Fecha Emisión": poliza.get("fecha_emision", ""),
-                    "Fecha Inicio": poliza["fecha_inicio"],
-                    "Fecha Fin": poliza["fecha_fin"],
-                    "Estado": poliza["estado"],
-                    "Observaciones": poliza.get("observaciones", ""),
-                    "Beneficiario": beneficiario
-                })
-            df = pd.DataFrame(data)
-            st.dataframe(df)
+            import json
+            st.markdown("### Pólizas (JSON)")
+            for idx, row in enumerate(polizas):
+                poliza_dict = dict(zip(all_fields, row))
+                # Reemplazar cliente_id por nombre/razón social
+                cliente_id = poliza_dict.get("cliente_id")
+                if cliente_id in clientes_dict:
+                    poliza_dict["cliente"] = clientes_dict[cliente_id]
+                if "cliente_id" in poliza_dict:
+                    del poliza_dict["cliente_id"]
+                # Reemplazar usuario_id por username
+                usuario_id = poliza_dict.get("usuario_id")
+                if usuario_id in usuarios_dict:
+                    poliza_dict["usuario"] = usuarios_dict[usuario_id]
+                if "usuario_id" in poliza_dict:
+                    del poliza_dict["usuario_id"]
+                # Mostrar suma_asegurada de los ramos asociados (concatenados por coma si hay varios)
+                poliza_id = row[0]
+                if poliza_id in ramos_por_poliza:
+                    poliza_dict["suma_asegurada"] = ", ".join([str(s) for s in ramos_por_poliza[poliza_id] if s])
+                else:
+                    poliza_dict["suma_asegurada"] = ""
+                st.code(json.dumps(poliza_dict, indent=2, ensure_ascii=False), language="json")
         else:
             st.info("No hay pólizas registradas.")
 

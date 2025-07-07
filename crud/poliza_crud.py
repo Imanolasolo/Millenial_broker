@@ -413,33 +413,37 @@ def crud_polizas():
                     poliza_data = st.session_state.get("poliza_form_data", {})
                     facturacion_data = st.session_state.get("facturacion_data", {})
                     if poliza_data:
-                        # Unir ambos diccionarios para el insert
-                        insert_data = {**poliza_data, **facturacion_data}
-                        # Obtener campos válidos para la tabla polizas
+                        # Validar que el número de póliza no exista antes de insertar
                         conn = sqlite3.connect(DB_FILE)
                         cursor = conn.cursor()
-                        cursor.execute("PRAGMA table_info(polizas)")
-                        poliza_cols = [row[1] for row in cursor.fetchall() if row[1] != "id"]
-                        insert_fields = []
-                        insert_values = []
-                        for col in poliza_cols:
-                            insert_fields.append(col)
-                            insert_values.append(insert_data.get(col, ""))
-                        try:
-                            cursor.execute(
-                                f"INSERT INTO polizas ({', '.join(insert_fields)}) VALUES ({', '.join(['?']*len(insert_fields))})",
-                                insert_values
-                            )
-                            conn.commit()
-                            st.success("Póliza creada exitosamente.")
-                            # Limpiar el estado para permitir crear otra
-                            st.session_state["poliza_form_step"] = 1
-                            st.session_state["poliza_form_data"] = {}
-                            st.session_state["facturacion_data"] = {}
-                        except Exception as e:
-                            st.error(f"Error al crear la póliza: {e}")
-                        finally:
+                        cursor.execute("SELECT COUNT(*) FROM polizas WHERE numero_poliza = ?", (poliza_data.get("numero_poliza", ""),))
+                        exists = cursor.fetchone()[0]
+                        if exists:
+                            st.error("Ya existe una póliza con ese número. Por favor, ingrese un número de póliza único.")
                             conn.close()
+                        else:
+                            insert_data = {**poliza_data, **facturacion_data}
+                            cursor.execute("PRAGMA table_info(polizas)")
+                            poliza_cols = [row[1] for row in cursor.fetchall() if row[1] != "id"]
+                            insert_fields = []
+                            insert_values = []
+                            for col in poliza_cols:
+                                insert_fields.append(col)
+                                insert_values.append(insert_data.get(col, ""))
+                            try:
+                                cursor.execute(
+                                    f"INSERT INTO polizas ({', '.join(insert_fields)}) VALUES ({', '.join(['?']*len(insert_fields))})",
+                                    insert_values
+                                )
+                                conn.commit()
+                                st.success("Póliza creada exitosamente.")
+                                st.session_state["poliza_form_step"] = 1
+                                st.session_state["poliza_form_data"] = {}
+                                st.session_state["facturacion_data"] = {}
+                            except Exception as e:
+                                st.error(f"Error al crear la póliza: {e}")
+                            finally:
+                                conn.close()
     elif operation == "Leer":
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()

@@ -142,77 +142,7 @@ def admin_dashboard():
         </style>
     """, unsafe_allow_html=True)
 
-    # Estilos para reducir el ancho de TODOS los campos de entrada (inputs, selects, multiselects, date, file, number, checkbox, radio, color, slider, etc.)
-    st.markdown("""
-        <style>
-        /* Inputs de texto */
-        .stTextInput input {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Áreas de texto */
-        .stTextArea textarea {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Selectbox y multiselect */
-        .stSelectbox div[data-baseweb="select"], .stMultiSelect div[data-baseweb="select"] {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Date input */
-        .stDateInput input {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* File uploader */
-        .stFileUploader {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Number input */
-        .stNumberInput input {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Checkbox y radio */
-        .stCheckbox, .stRadio {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Color picker */
-        .stColorPicker {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Slider */
-        .stSlider {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Botones */
-        button[kind="primary"], button[kind="secondary"], .stButton button {
-            max-width: 300px !important;
-            min-width: 120px !important;
-            width: 50% !important;
-        }
-        /* Centrar los inputs si lo deseas */
-        .stTextInput, .stTextArea, .stSelectbox, .stMultiSelect, .stDateInput, .stFileUploader, .stNumberInput, .stCheckbox, .stRadio, .stColorPicker, .stSlider {
-            margin-left: 0 !important;
-        }
-        /* El selector siguiente NO funciona porque Streamlit no asigna el id del key al input HTML */
-        /* cliente_nombres input { width:22px !important;} */
-        </style>
-    """, unsafe_allow_html=True)
+    
 
     if "module" not in st.session_state:
         st.session_state["module"] = None

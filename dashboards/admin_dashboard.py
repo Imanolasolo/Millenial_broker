@@ -18,6 +18,7 @@ from crud.aseguradora_crud import crud_aseguradoras
 from crud.agencias_crud import crud_agencias
 from crud.role_crud import crud_roles
 from crud.poliza_crud import crud_polizas
+from crud.ramos_crud import crud_ramos
 
 def get_pdf_text(pdf_list):
     text = ""
@@ -197,6 +198,8 @@ def admin_dashboard():
         crud_roles()
     elif module == "Pólizas":
         crud_polizas()
+    elif module == "Ramos de Seguros":
+        crud_ramos()
     # ...puedes agregar más elif para otros módulos si creas sus archivos...
 
     # Botón de Logout

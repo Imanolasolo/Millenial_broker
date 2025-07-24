@@ -81,7 +81,7 @@ def get_client_details(client_id):
 def get_ramos_options():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre FROM ramos_seguros")
+    cursor.execute("SELECT id, nombre FROM ramos_seguros ORDER BY nombre")
     ramos = cursor.fetchall()
     conn.close()
     return [(r[0], r[1]) for r in ramos]
@@ -224,7 +224,7 @@ def crud_polizas():
 
             col1, col2 = st.columns(2)
             with col1:
-                numero_poliza = st.text_input("Número de Póliza (mínimo 10 caracteres)")
+                numero_poliza = st.text_input("Número de Póliza")
             with col2:
                 fecha_emision = st.date_input("Fecha de Emisión")
 
@@ -279,8 +279,8 @@ def crud_polizas():
                     st.error("Debe seleccionar una aseguradora.")
                 elif not selected_sucursal:
                     st.error("Debe seleccionar una sucursal.")
-                elif not numero_poliza or len(numero_poliza) < 10:
-                    st.error("El número de póliza debe tener al menos 10 caracteres.")
+                elif not numero_poliza or not numero_poliza.strip():
+                    st.error("El número de póliza es obligatorio.")
                 elif not beneficiario_text:
                     st.error("Debe ingresar el beneficiario.")
                 elif not fecha_inicio or not fecha_fin:
@@ -347,6 +347,20 @@ def crud_polizas():
                     prima = st.text_input("Prima del Seguro")
                 with col2:
                     suma_asegurada = st.text_input("Suma Asegurada")
+                
+                # Nuevo campo: Ramos de Seguro
+                ramos_options = get_ramos_options()
+                if ramos_options:
+                    selected_ramo = st.selectbox(
+                        "Ramos de Seguro",
+                        ramos_options,
+                        format_func=lambda x: x[1] if x else "",
+                        key="ramo_seguro"
+                    )
+                else:
+                    st.warning("No hay ramos de seguros registrados. Por favor, registre ramos antes de crear pólizas.")
+                    selected_ramo = None
+                
                 # Eliminar deducible y cobertura
                 observaciones_poliza = st.text_area("Observaciones de la póliza")
 
@@ -386,6 +400,7 @@ def crud_polizas():
                         "tipo_movimiento": tipo_movimiento,
                         "gestion_cobro": selected_ejecutivo[0] if selected_ejecutivo else None,
                         "liberacion_comision": liberacion_comision,
+                        "ramo_id": selected_ramo[0] if selected_ramo else None,
                         "prima": prima,
                         "suma_asegurada": suma_asegurada,
                         # "deducible": deducible,  # Eliminado
@@ -626,6 +641,15 @@ def crud_polizas():
                         current_agrupadora = next((a for a in agrupadora_options if a[0] == poliza_dict.get(field)), None)
                         updated = st.selectbox("Agrupadora", agrupadora_options, index=agrupadora_options.index(current_agrupadora) if current_agrupadora else 0, format_func=lambda x: x[1]) if agrupadora_options else None
                         updated_values[field] = updated[0] if updated else None
+                    elif field == "ramo_id":
+                        ramos_options = get_ramos_options()
+                        current_ramo = next((r for r in ramos_options if r[0] == poliza_dict.get(field)), None)
+                        if ramos_options:
+                            updated = st.selectbox("Ramos de Seguro", ramos_options, index=ramos_options.index(current_ramo) if current_ramo else 0, format_func=lambda x: x[1])
+                            updated_values[field] = updated[0]
+                        else:
+                            st.warning("No hay ramos de seguros registrados.")
+                            updated_values[field] = None
                     elif field in ["fecha_inicio", "fecha_fin", "fecha_emision"]:
                         import datetime
                         val = poliza_dict.get(field)

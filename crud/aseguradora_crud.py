@@ -41,14 +41,42 @@ def get_sucursales_by_aseguradora(aseguradora_id):
     conn.close()
     return rows
 
+def get_ramos_options():
+    """Obtiene todos los ramos de seguros disponibles"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, nombre FROM ramos_seguros ORDER BY nombre")
+        ramos = cursor.fetchall()
+        return [(r[0], r[1]) for r in ramos]
+    except Exception as e:
+        st.error(f"Error al obtener ramos: {str(e)}")
+        return []
+    finally:
+        conn.close()
+
+def get_aseguradora_ramos(aseguradora_id):
+    """Obtiene los ramos asociados a una aseguradora"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT r.id, r.nombre 
+            FROM ramos_seguros r
+            INNER JOIN aseguradora_ramos ar ON r.id = ar.ramo_id
+            WHERE ar.aseguradora_id = ?
+            ORDER BY r.nombre
+        ''', (aseguradora_id,))
+        return cursor.fetchall()
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
 def create_aseguradora(data, ramo_ids):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        # Eliminar columna sucursal si existe (no usar más en aseguradoras)
-        cursor.execute("PRAGMA table_info(aseguradoras)")
-        cols = [row[1] for row in cursor.fetchall()]
-        # No agregar ni usar columna sucursal aquí
         cursor.execute('''
             INSERT INTO aseguradoras (
                 tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
@@ -91,7 +119,6 @@ def update_aseguradora(id, data, ramo_ids):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        # No usar columna sucursal aquí
         cursor.execute('''
             UPDATE aseguradoras
             SET tipo_contribuyente=?, tipo_identificacion=?, identificacion=?, razon_social=?,
@@ -126,9 +153,19 @@ def crud_aseguradoras():
     
     if action == "Crear":
         st.write("### Crear Aseguradora")
-        tipo_contribuyente = st.selectbox("Tipo de Contribuyente", ["Persona Natural", "Persona Jurídica"])
-        tipo_identificacion = st.selectbox("Tipo de Identificación", ["Cédula", "RUC", "Pasaporte"])
-        identificacion = st.text_input("Identificación")
+        # Removed dropdown - all insurance companies are legal entities
+        tipo_contribuyente = "Persona Jurídica"
+        st.info("💼 Tipo de Contribuyente: Persona Jurídica (todas las aseguradoras son personas jurídicas)")
+        
+        # Removed dropdown - all insurance companies use RUC
+        tipo_identificacion = "RUC"
+        st.info("🏢 Tipo de Identificación: RUC (todas las aseguradoras usan RUC de 13 dígitos)")
+        
+        identificacion = st.text_input(
+            "RUC (13 dígitos)", 
+            max_chars=13,
+            help="Ingrese el RUC de 13 dígitos de la aseguradora"
+        )
         razon_social = st.text_input("Razón Social")
         nombre_comercial = st.text_input("Nombre Comercial")
         pais = st.text_input("País")
@@ -136,13 +173,34 @@ def crud_aseguradoras():
         aniversario = st.date_input("Aniversario")
         web = st.text_input("Sitio Web")
         correo_electronico = st.text_input("Correo Electrónico")
-        # Eliminar campo sucursal aquí
-        ramo_ids = st.multiselect("Seleccione los Ramos", [1, 2, 3, 4, 5])  # Ejemplo de IDs de ramos
+        
+        # Replace the 1-5 dropdown with actual ramos from database
+        ramos_options = get_ramos_options()
+        if ramos_options:
+            selected_ramos = st.multiselect(
+                "Seleccione los Ramos de Seguros",
+                options=[r[0] for r in ramos_options],
+                format_func=lambda x: next((r[1] for r in ramos_options if r[0] == x), ""),
+                help="Seleccione uno o más ramos de seguros que maneja esta aseguradora"
+            )
+        else:
+            st.warning("No hay ramos de seguros registrados. Por favor, registre ramos antes de crear aseguradoras.")
+            selected_ramos = []
+        
         if st.button("Crear Aseguradora"):
-            data = (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
-                    nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico)
-            message = create_aseguradora(data, ramo_ids)
-            st.success(message)
+            if not razon_social:
+                st.error("La razón social es obligatoria")
+            elif not identificacion or len(identificacion) != 13:
+                st.error("El RUC debe tener exactamente 13 dígitos")
+            elif not identificacion.isdigit():
+                st.error("El RUC debe contener solo números")
+            elif not selected_ramos:
+                st.error("Debe seleccionar al menos un ramo de seguros")
+            else:
+                data = (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
+                        nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico)
+                message = create_aseguradora(data, selected_ramos)
+                st.success(message)
     
     elif action == "Leer":
         st.write("### Listado de Aseguradoras")
@@ -173,9 +231,20 @@ def crud_aseguradoras():
         if seleccion:
             aseguradora = next((a for a in aseguradoras if a[0] == seleccion), None)
             if aseguradora:
-                tipo_contribuyente = st.selectbox("Tipo de Contribuyente", ["Persona Natural", "Persona Jurídica"], index=["Persona Natural", "Persona Jurídica"].index(aseguradora[1]))
-                tipo_identificacion = st.selectbox("Tipo de Identificación", ["Cédula", "RUC", "Pasaporte"], index=["Cédula", "RUC", "Pasaporte"].index(aseguradora[2]))
-                identificacion = st.text_input("Identificación", aseguradora[3])
+                # Removed dropdown - all insurance companies are legal entities
+                tipo_contribuyente = "Persona Jurídica"
+                st.info("💼 Tipo de Contribuyente: Persona Jurídica (todas las aseguradoras son personas jurídicas)")
+                
+                # Removed dropdown - all insurance companies use RUC
+                tipo_identificacion = "RUC"
+                st.info("🏢 Tipo de Identificación: RUC (todas las aseguradoras usan RUC de 13 dígitos)")
+                
+                identificacion = st.text_input(
+                    "RUC (13 dígitos)", 
+                    value=aseguradora[3],
+                    max_chars=13,
+                    help="Ingrese el RUC de 13 dígitos de la aseguradora"
+                )
                 razon_social = st.text_input("Razón Social", aseguradora[4])
                 nombre_comercial = st.text_input("Nombre Comercial", aseguradora[5])
                 pais = st.text_input("País", aseguradora[6])
@@ -183,13 +252,39 @@ def crud_aseguradoras():
                 aniversario = st.date_input("Aniversario", aseguradora[8])
                 web = st.text_input("Sitio Web", aseguradora[9])
                 correo_electronico = st.text_input("Correo Electrónico", aseguradora[10])
-                # Eliminar campo sucursal aquí
-                ramo_ids = st.multiselect("Seleccione los Ramos", [1, 2, 3, 4, 5], default=aseguradora[11:] if len(aseguradora) > 11 else [])
+                
+                # Get current ramos for this aseguradora
+                current_ramos = get_aseguradora_ramos(aseguradora[0])
+                current_ramos_ids = [r[0] for r in current_ramos]
+                
+                # Ramos selection for editing
+                ramos_options = get_ramos_options()
+                if ramos_options:
+                    selected_ramos = st.multiselect(
+                        "Seleccione los Ramos de Seguros",
+                        options=[r[0] for r in ramos_options],
+                        default=current_ramos_ids,
+                        format_func=lambda x: next((r[1] for r in ramos_options if r[0] == x), ""),
+                        help="Seleccione uno o más ramos de seguros que maneja esta aseguradora"
+                    )
+                else:
+                    st.warning("No hay ramos de seguros registrados.")
+                    selected_ramos = []
+                
                 if st.button("Actualizar Aseguradora"):
-                    data = (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
-                            nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico)
-                    message = update_aseguradora(seleccion, data, ramo_ids)
-                    st.success(message)
+                    if not razon_social.strip():
+                        st.error("La razón social es obligatoria")
+                    elif not identificacion or len(identificacion) != 13:
+                        st.error("El RUC debe tener exactamente 13 dígitos")
+                    elif not identificacion.isdigit():
+                        st.error("El RUC debe contener solo números")
+                    elif not selected_ramos:
+                        st.error("Debe seleccionar al menos un ramo de seguros")
+                    else:
+                        data = (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
+                                nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico)
+                        message = update_aseguradora(seleccion, data, selected_ramos)
+                        st.success(message)
     
     elif action == "Eliminar":
         st.write("### Eliminar Aseguradora")
@@ -225,5 +320,4 @@ def crud_aseguradoras():
                 if submitted and nombre:
                     create_sucursal(aseguradora_id, nombre, ciudad, direccion, telefono, email)
                     st.success("Sucursal creada exitosamente.")
-                    # Refrescar la página para mostrar la nueva sucursal
-                    st.experimental_rerun()
+                    st.rerun()

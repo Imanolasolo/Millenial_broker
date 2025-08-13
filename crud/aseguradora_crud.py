@@ -1,5 +1,8 @@
 import sqlite3
 import streamlit as st
+import json
+import os
+from datetime import datetime
 from dbconfig import DB_FILE
 
 # --- NUEVO: Tabla sucursales ---
@@ -147,9 +150,87 @@ def delete_aseguradora(id):
     finally:
         conn.close()
 
+def populate_aseguradoras_from_json():
+    """Populate the database with insurance companies from the JSON file"""
+    json_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "aseguradoras.json")
+    
+    if not os.path.exists(json_file_path):
+        return "Error: No se encontró el archivo aseguradoras.json"
+    
+    try:
+        with open(json_file_path, 'r', encoding='utf-8') as file:
+            aseguradoras_data = json.load(file)
+        
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        inserted_count = 0
+        skipped_count = 0
+        
+        for aseguradora in aseguradoras_data:
+            # Skip empty entries
+            if not aseguradora.get("Razón social") or not aseguradora.get("Identificación"):
+                skipped_count += 1
+                continue
+            
+            # Prepare data with proper formatting
+            tipo_contribuyente = "Persona Jurídica"  # All insurance companies are legal entities
+            tipo_identificacion = "RUC"  # All use RUC
+            identificacion = aseguradora.get("Identificación", "").strip()
+            razon_social = aseguradora.get("Razón social", "").strip()
+            nombre_comercial = aseguradora.get("Nombre comercial", "").strip()
+            pais = aseguradora.get("País", "ECUADOR").strip()
+            representante_legal = aseguradora.get("Representante legal", "").strip()
+            
+            # Handle anniversary date
+            aniversario_str = aseguradora.get("Aniversario", "")
+            if aniversario_str and aniversario_str != "0001-01-01" and aniversario_str != "1001-01-01":
+                try:
+                    aniversario = datetime.strptime(aniversario_str, "%Y-%m-%d").date()
+                except:
+                    aniversario = None
+            else:
+                aniversario = None
+            
+            web = aseguradora.get("Web", "").strip()
+            if web in ["N/A", "pagina", ""]:
+                web = ""
+            
+            correo_electronico = aseguradora.get("Correo electrónico", "").strip()
+            if correo_electronico == "a@seguros.com" or correo_electronico == "a@alianza.com":
+                correo_electronico = ""
+            
+            # Check if aseguradora already exists
+            cursor.execute("SELECT id FROM aseguradoras WHERE identificacion = ?", (identificacion,))
+            if cursor.fetchone():
+                skipped_count += 1
+                continue
+            
+            # Insert the aseguradora
+            try:
+                cursor.execute('''
+                    INSERT INTO aseguradoras (
+                        tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
+                        nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
+                      nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico))
+                inserted_count += 1
+            except sqlite3.IntegrityError:
+                skipped_count += 1
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        return f"Proceso completado: {inserted_count} aseguradoras insertadas, {skipped_count} omitidas (duplicadas o vacías)"
+        
+    except Exception as e:
+        return f"Error al procesar el archivo JSON: {str(e)}"
+
 def crud_aseguradoras():
     st.subheader("Gestión de Aseguradoras")
-    action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar", "Sucursales"])
+    action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar", "Sucursales", "Cargar desde JSON"])
     
     if action == "Crear":
         st.write("### Crear Aseguradora")
@@ -321,3 +402,16 @@ def crud_aseguradoras():
                     create_sucursal(aseguradora_id, nombre, ciudad, direccion, telefono, email)
                     st.success("Sucursal creada exitosamente.")
                     st.rerun()
+    
+    elif action == "Cargar desde JSON":
+        st.write("### Cargar Aseguradoras desde JSON")
+        st.info("Esta opción cargará las aseguradoras desde el archivo assets/aseguradoras.json")
+        
+        if st.button("Cargar Aseguradoras"):
+            with st.spinner("Cargando aseguradoras..."):
+                message = populate_aseguradoras_from_json()
+                if "Error" in message:
+                    st.error(message)
+                else:
+                    st.success(message)
+                    st.info("💡 Nota: Las aseguradoras se han cargado sin ramos asignados. Puede editarlas posteriormente para asignar ramos de seguros.")

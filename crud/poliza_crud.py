@@ -149,6 +149,18 @@ def crud_polizas():
     # --- Añadir columna sucursal_id si no existe ---
     if "sucursal_id" not in poliza_columns:
         cursor.execute("ALTER TABLE polizas ADD COLUMN sucursal_id INTEGER")
+    # --- Añadir columna asegurado_contratante si no existe ---
+    if "asegurado_contratante" not in poliza_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN asegurado_contratante TEXT")
+    # --- Añadir columna id_beneficiario si no existe ---
+    if "id_beneficiario" not in poliza_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN id_beneficiario TEXT")
+    # --- Añadir columna prima_neta si no existe ---
+    if "prima_neta" not in poliza_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN prima_neta TEXT")
+    # --- Añadir columna fecha_factura si no existe ---
+    if "fecha_factura" not in poliza_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN fecha_factura TEXT")
     conn.commit()
     conn.close()
     poliza_fields = [col[1] for col in columns_info if col[1] != "id"]
@@ -168,6 +180,7 @@ def crud_polizas():
         ("otros_iva", "TEXT"),
         ("total", "TEXT"),
         ("cuotas", "TEXT"),
+        ("fecha_factura", "TEXT"),
     ]
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -182,6 +195,21 @@ def crud_polizas():
     if operation == "Crear":
         # FORMULARIO 1: Datos de información general
         with st.expander("Datos generales de la póliza"):
+            col1, col2 = st.columns(2)
+            with col1:
+                # PRIMER CAMPO: Número de Póliza
+                numero_poliza = st.text_input("Número de Póliza")
+
+            with col2:
+                # SEGUNDO CAMPO: Tomador de la póliza
+                client_options = get_client_options()
+                selected_tomador = st.selectbox(
+                "Tomador de la póliza",
+                client_options,
+                format_func=lambda x: x[1] if x else "",
+                key="tomador_poliza_selector"
+            ) if client_options else None
+            
             aseguradora_options = get_aseguradora_options()
             aseguradora_labels = [a[1] for a in aseguradora_options]
             col1, col2 = st.columns(2)
@@ -222,29 +250,35 @@ def crud_polizas():
                 else:
                     st.info("No hay sucursales registradas para esta aseguradora.")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                numero_poliza = st.text_input("Número de Póliza")
-            with col2:
-                fecha_emision = st.date_input("Fecha de Emisión")
-
-            col1, col2 = st.columns(2)
-            # Inicializar client_options antes de usarlo
-            client_options = get_client_options()
-            with col1:
-                selected_tomador = st.selectbox(
-                    "Tomador de la póliza",
-                    client_options,
-                    format_func=lambda x: x[1] if x else ""
-                ) if client_options else None
-            with col2:
-                beneficiario_text = st.text_input("Beneficiario")
+            fecha_emision = st.date_input("Fecha de Emisión")
 
             col1, col2, col3 = st.columns(3)
             with col1:
                 fecha_inicio = st.date_input("Inicio de vigencia")
             with col2:
-                fecha_fin = st.date_input("Fin de vigencia")
+                # Calcular automáticamente la fecha fin como un año después del inicio
+                fecha_fin_default = None
+                if fecha_inicio:
+                    try:
+                        from datetime import datetime, timedelta
+                        # Agregar un año a la fecha de inicio
+                        if fecha_inicio.month == 2 and fecha_inicio.day == 29:
+                            # Manejar años bisiestos - si es 29 de febrero, usar 28 de febrero del año siguiente
+                            fecha_fin_default = fecha_inicio.replace(year=fecha_inicio.year + 1, day=28)
+                        else:
+                            try:
+                                fecha_fin_default = fecha_inicio.replace(year=fecha_inicio.year + 1)
+                            except ValueError:
+                                # Fallback para casos edge
+                                fecha_fin_default = fecha_inicio + timedelta(days=365)
+                    except Exception:
+                        fecha_fin_default = None
+                
+                fecha_fin = st.date_input(
+                    "Fin de vigencia", 
+                    value=fecha_fin_default,
+                    help="Se establece automáticamente un año después del inicio de vigencia. Puede modificarse si es necesario."
+                )
             with col3:
                 dias_cobertura = ""
                 if fecha_inicio and fecha_fin:
@@ -253,9 +287,10 @@ def crud_polizas():
                     except Exception:
                         dias_cobertura = ""
                 st.text_input("Días de Cobertura", value=str(dias_cobertura) if dias_cobertura != "" else "", disabled=True)
+
             col1, col2 = st.columns(2)
             with col1:
-                tipo_riesgo = st.selectbox("Tipo de Riesgo", ["Nueva", "Renovación"])
+                estado_poliza = st.selectbox("Estado póliza", ["Borrador", "Emitida", "Anulada", "Activa", "Pagada", "Pendiente de Pago"])
             with col2:
                 agrupadora_options = get_agrupadora_options()
                 selected_agrupadora = st.selectbox(
@@ -264,25 +299,14 @@ def crud_polizas():
                     format_func=lambda x: x[1] if x else "",
                     key="agrupadora"
                 ) if agrupadora_options else None
-            col1, col2 = st.columns(2)
-            with col1:
-                formas_de_pago = st.selectbox("Formas de pago", ["Contado", "Cuotas", "Crédito"])
-            with col2:
-                tipo_de_facturacion = st.selectbox("Tipo de Facturación", ["Anual", "Semestral","Trimestral","Mensual"])
-            # Mover el campo cuotas aquí desde el formulario siguiente
-            # cuotas = st.text_input("Cuotas")
+
             siguiente = st.button("Siguiente")
 
             if siguiente:
-                # Ya no es necesario volver a pedir selected_tomador ni validarlo aquí
                 if not selected_aseguradora:
                     st.error("Debe seleccionar una aseguradora.")
-                elif not selected_sucursal:
-                    st.error("Debe seleccionar una sucursal.")
                 elif not numero_poliza or not numero_poliza.strip():
                     st.error("El número de póliza es obligatorio.")
-                elif not beneficiario_text:
-                    st.error("Debe ingresar el beneficiario.")
                 elif not fecha_inicio or not fecha_fin:
                     st.error("Debe ingresar la vigencia de la póliza.")
                 else:
@@ -296,22 +320,304 @@ def crud_polizas():
                         "fecha_emision": fecha_emision.strftime("%Y-%m-%d"),
                         "fecha_inicio": fecha_inicio.strftime("%Y-%m-%d"),
                         "fecha_fin": fecha_fin.strftime("%Y-%m-%d"),
-                        "beneficiario": beneficiario_text,
                         "tomador_id": tomador_id,
-                        "tomador_nombre": tomador_nombre,  # <-- Aquí se guarda el nombre del tomador
-                        "tipo_riesgo": tipo_riesgo,
-                        "formas_de_pago": formas_de_pago,
-                        "tipo_de_facturacion": tipo_de_facturacion,
-                        # "cuotas": cuotas,
-                        # ...existing code...
+                        "tomador_nombre": tomador_nombre,
+                        "estado_poliza": estado_poliza,
                     }
                     st.session_state["poliza_form_step"] = 2
 
+        # MOSTRAR INFORMACIÓN DEL CLIENTE (solo si se ha pulsado "Siguiente" y paso 2)
+        if st.session_state.get("poliza_form_step") == 2:
+            poliza_data = st.session_state.get("poliza_form_data", {})
+            tomador_id = poliza_data.get("tomador_id")
+            
+            if tomador_id:
+                client_details = get_client_details(tomador_id)
+                if client_details:
+                    with st.expander("II. Datos del Cliente (autocompletados, solo lectura)", expanded=True):
+                        import pandas as pd
+                        
+                        # Preparar los datos para el DataFrame
+                        if client_details.get("tipo_cliente") == "Individual":
+                            nombre_display = f"{client_details.get('nombres', '')} {client_details.get('apellidos', '')}".strip()
+                        else:
+                            nombre_display = client_details.get("razon_social", "")
+                        
+                        telefono_display = client_details.get("telefono_movil", "") or client_details.get("telefono_fijo", "")
+                        
+                        # Crear DataFrame con los datos del cliente
+                        client_data = {
+                            "Campo": [
+                                "Identificación cliente",
+                                "Nombre / Razón social", 
+                                "Tipo de cliente",
+                                "Correo electrónico",
+                                "Teléfono",
+                                "Dirección"
+                            ],
+                            "Valor": [
+                                client_details.get("numero_documento", ""),
+                                nombre_display,
+                                client_details.get("tipo_cliente", ""),
+                                client_details.get("correo_electronico", ""),
+                                telefono_display,
+                                client_details.get("direccion_domicilio", "")
+                            ],
+                            "Observaciones": [
+                                "Cédula o RUC",
+                                "Natural o Jurídico",
+                                "Solo lectura",
+                                "Solo lectura",
+                                "Solo lectura", 
+                                "Solo lectura"
+                            ]
+                        }
+                        
+                        df_client = pd.DataFrame(client_data)
+                        
+                        # Mostrar el DataFrame con formato mejorado
+                        st.dataframe(
+                            df_client,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "Campo": st.column_config.TextColumn("Campo", width="medium"),
+                                "Valor": st.column_config.TextColumn("Valor", width="large"),
+                                "Observaciones": st.column_config.TextColumn("Observaciones", width="medium")
+                            }
+                        )
+
+            # NUEVO EXPANDER: Relación Asegurado-Contratante
+            with st.expander("III. Relación Asegurado-Contratante", expanded=True):
+                asegurado_contratante = st.selectbox(
+                    "¿El asegurado es el mismo que el contratante?",
+                    ["Sí", "No"],
+                    help="Seleccione si el asegurado y el contratante son la misma persona/entidad"
+                )
+                
+                # Campos adicionales cuando el asegurado NO es el mismo que el contratante
+                beneficiario_nombre = ""
+                id_beneficiario = ""
+                
+                if asegurado_contratante == "No":
+                    st.info("💡 Complete los datos del beneficiario/asegurado por separado:")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        beneficiario_nombre = st.text_input(
+                            "Beneficiario",
+                            help="Nombre completo del beneficiario/asegurado"
+                        )
+                    with col2:
+                        id_beneficiario = st.text_input(
+                            "ID de Beneficiario",
+                            help="Cédula, RUC o identificación del beneficiario"
+                        )
+                else:
+                    st.success("✅ El asegurado es el mismo que el contratante (tomador de la póliza).")
+
+            # NUEVO EXPANDER: Ramos asegurados
+            with st.expander("IV. Ramos asegurados", expanded=True):
+                # Campo de Número de Póliza
+                st.markdown("**📄 Número de Póliza para los Ramos**")
+                
+                # Obtener el número de póliza actual
+                poliza_data = st.session_state.get("poliza_form_data", {})
+                numero_poliza_actual = poliza_data.get("numero_poliza", "")
+                
+                # Obtener pólizas existentes
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute("SELECT numero_poliza FROM polizas ORDER BY id DESC")
+                polizas_existentes = cursor.fetchall()
+                conn.close()
+                
+                # Opciones de selección de póliza
+                col1, col2 = st.columns(2)
+                with col1:
+                    opcion_poliza = st.radio(
+                        "Seleccione una opción:",
+                        ["Usar póliza actual", "Usar póliza existente"],
+                        key="opcion_numero_poliza"
+                    )
+                
+                with col2:
+                    if opcion_poliza == "Usar póliza actual":
+                        numero_poliza_seleccionado = st.text_input(
+                            "Número de Póliza (actual)",
+                            value=numero_poliza_actual,
+                            disabled=True,
+                            help="Este es el número de la póliza que se está creando actualmente"
+                        )
+                    else:
+                        if polizas_existentes:
+                            polizas_opciones = [p[0] for p in polizas_existentes if p[0]]
+                            numero_poliza_seleccionado = st.selectbox(
+                                "Seleccionar póliza existente",
+                                polizas_opciones,
+                                help="Seleccione una póliza previamente creada"
+                            )
+                        else:
+                            st.warning("No hay pólizas existentes en el sistema")
+                            numero_poliza_seleccionado = numero_poliza_actual
+                
+                # Mostrar póliza seleccionada
+                if numero_poliza_seleccionado:
+                    st.success(f"✅ Póliza seleccionada: **{numero_poliza_seleccionado}**")
+                else:
+                    st.error("⚠️ Debe seleccionar un número de póliza")
+                
+                st.divider()
+                
+                st.info("📋 Seleccione los ramos de seguros que cubrirá esta póliza")
+                
+                # Obtener opciones de ramos disponibles
+                ramos_disponibles = get_ramos_options()
+                
+                if ramos_disponibles:
+                    # Inicializar la lista de ramos seleccionados en session_state si no existe
+                    if "ramos_seleccionados" not in st.session_state:
+                        st.session_state["ramos_seleccionados"] = []
+                    
+                    # Selector de ramo
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        ramo_a_agregar = st.selectbox(
+                            "Seleccionar ramo de seguro",
+                            ramos_disponibles,
+                            format_func=lambda x: x[1] if x else "",
+                            key="selector_ramo"
+                        )
+                    with col2:
+                        if st.button("➕ Agregar Ramo", key="btn_agregar_ramo"):
+                            if ramo_a_agregar and ramo_a_agregar not in st.session_state["ramos_seleccionados"]:
+                                st.session_state["ramos_seleccionados"].append(ramo_a_agregar)
+                                st.success(f"Ramo '{ramo_a_agregar[1]}' agregado exitosamente")
+                            elif ramo_a_agregar in st.session_state["ramos_seleccionados"]:
+                                st.warning("Este ramo ya está seleccionado")
+                    
+                    # Mostrar ramos seleccionados
+                    if st.session_state["ramos_seleccionados"]:
+                        st.markdown("**Ramos seleccionados:**")
+                        
+                        # Crear DataFrame con los ramos seleccionados
+                        import pandas as pd
+                        ramos_data = []
+                        for idx, ramo in enumerate(st.session_state["ramos_seleccionados"]):
+                            ramos_data.append({
+                                "N°": idx + 1,
+                                "ID": ramo[0],
+                                "Nombre del Ramo": ramo[1],
+                                "Acción": f"Eliminar_{idx}"
+                            })
+                        
+                        df_ramos = pd.DataFrame(ramos_data)
+                        
+                        # Mostrar la tabla
+                        st.dataframe(
+                            df_ramos[["N°", "ID", "Nombre del Ramo"]],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Botones para eliminar ramos individuales
+                        st.markdown("**Eliminar ramos:**")
+                        cols = st.columns(min(len(st.session_state["ramos_seleccionados"]), 4))
+                        for idx, ramo in enumerate(st.session_state["ramos_seleccionados"]):
+                            with cols[idx % 4]:
+                                if st.button(f"🗑️ {ramo[1][:15]}...", key=f"eliminar_ramo_{idx}"):
+                                    st.session_state["ramos_seleccionados"].remove(ramo)
+                                    st.rerun()
+                        
+                        # Botón para limpiar todos los ramos
+                        if st.button("🗑️ Limpiar todos los ramos", key="limpiar_ramos"):
+                            st.session_state["ramos_seleccionados"] = []
+                    st.warning("⚠️ No hay ramos de seguros registrados en el sistema. Por favor, registre ramos antes de crear pólizas.")
+
+                st.divider()
+                
+                # Campo de Suma Asegurada
+                st.markdown("**💰 Suma Asegurada**")
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    suma_asegurada_input = st.text_input(
+                        "Suma Asegurada",
+                        help="Ingrese el monto máximo que cubrirá la póliza (solo números)",
+                        placeholder="Ej: 100000.00"
+                    )
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)  # Espacio para alinear
+                    st.markdown("**USD $**")
+                
+                # Validar y formatear la suma asegurada
+                suma_asegurada = ""
+                if suma_asegurada_input:
+                    try:
+                        # Remover caracteres no numéricos excepto punto decimal
+                        cleaned_amount = ''.join(c for c in suma_asegurada_input if c.isdigit() or c == '.')
+                        if cleaned_amount:
+                            amount = float(cleaned_amount)
+                            suma_asegurada = f"${amount:,.2f} USD"
+                            st.success(f"✅ Suma Asegurada formateada: **{suma_asegurada}**")
+                        else:
+                            st.error("⚠️ Ingrese un monto válido")
+                    except ValueError:
+                        st.error("⚠️ Formato de monto inválido. Use solo números y punto decimal.")
+                
+                # Guardar el valor limpio para la base de datos
+                suma_asegurada_db = suma_asegurada_input if suma_asegurada_input else ""
+
+                st.divider()
+                
+                # Campo de Prima Neta
+                st.markdown("**💵 Prima Neta**")
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    prima_neta_input = st.text_input(
+                        "Prima Neta",
+                        help="Ingrese el monto de la prima neta (solo números)",
+                        placeholder="Ej: 5000.00"
+                    )
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)  # Espacio para alinear
+                    st.markdown("**USD $**")
+                
+                # Validar y formatear la prima neta
+                prima_neta = ""
+                if prima_neta_input:
+                    try:
+                        # Remover caracteres no numéricos excepto punto decimal
+                        cleaned_amount = ''.join(c for c in prima_neta_input if c.isdigit() or c == '.')
+                        if cleaned_amount:
+                            amount = float(cleaned_amount)
+                            prima_neta = f"${amount:,.2f} USD"
+                            st.success(f"✅ Prima Neta formateada: **{prima_neta}**")
+                        else:
+                            st.error("⚠️ Ingrese un monto válido")
+                    except ValueError:
+                        st.error("⚠️ Formato de monto inválido. Use solo números y punto decimal.")
+                
+                # Guardar el valor limpio para la base de datos
+                prima_neta_db = prima_neta_input if prima_neta_input else ""
+
+                st.divider()
+                
+                # Campo de Observaciones
+                st.markdown("**📝 Observaciones**")
+                observaciones_ramos = st.text_area(
+                    "Observaciones",
+                    help="Ingrese observaciones adicionales sobre los ramos asegurados",
+                    placeholder="Ej: Cobertura especial para equipos electrónicos...",
+                    height=100
+                )
+
         # FORMULARIO 2: Datos para facturación (solo si se ha pulsado "Siguiente" y paso 2)
         if st.session_state.get("poliza_form_step") == 2:
-            with st.container():
+            with st.expander("Información Adicional y de facturacion"):
                 
-                st.markdown("### Información Adicional")
+                
                 col1, col2 = st.columns(2)
                 with col1:
                     tipo_renovacion = st.selectbox("Tipo Renovación", ["MANUAL", "AUTOMATICO"])
@@ -341,29 +647,6 @@ def crud_polizas():
                 # Tipo de Factura después de anexos
                 tipo_factura = st.selectbox("Tipo de Factura", ["Física", "Electrónica", "Otro"])
                 
-                # --- Inputs para prima, suma asegurada y observaciones ---
-                col1, col2 = st.columns(2)
-                with col1:
-                    prima = st.text_input("Prima del Seguro")
-                with col2:
-                    suma_asegurada = st.text_input("Suma Asegurada")
-                
-                # Nuevo campo: Ramos de Seguro
-                ramos_options = get_ramos_options()
-                if ramos_options:
-                    selected_ramo = st.selectbox(
-                        "Ramos de Seguro",
-                        ramos_options,
-                        format_func=lambda x: x[1] if x else "",
-                        key="ramo_seguro"
-                    )
-                else:
-                    st.warning("No hay ramos de seguros registrados. Por favor, registre ramos antes de crear pólizas.")
-                    selected_ramo = None
-                
-                # Eliminar deducible y cobertura
-                observaciones_poliza = st.text_area("Observaciones de la póliza")
-
                 st.markdown("### Información Factura")
                 col1, col2 = st.columns(2)
                 with col1:
@@ -373,39 +656,112 @@ def crud_polizas():
                 clausulas_particulares = st.text_area("Cláusulas particulares")
                 col1, col2 ,col3 = st.columns(3)
                 with col1:
-                    contrib_scvs = st.text_input("Contrib. S.C.V.S.")
+                    # Calcular Contrib. S.C.V.S. como 0.5% de la prima neta
+                    contrib_scvs_calculado = ""
+                    if prima_neta_db:
+                        try:
+                            prima_neta_valor = float(prima_neta_db)
+                            contrib_scvs_valor = prima_neta_valor * 0.005  # 0.5%
+                            contrib_scvs_calculado = f"{contrib_scvs_valor:.2f}"
+                        except ValueError:
+                            contrib_scvs_calculado = "0.00"
+                    else:
+                        contrib_scvs_calculado = "0.00"
+                    
+                    contrib_scvs = st.text_input(
+                        "Contrib. S.C.V.S. (0.5% Prima Neta)", 
+                        value=contrib_scvs_calculado,
+                        disabled=True,
+                        help="Calculado automáticamente como 0.5% de la Prima Neta"
+                    )
                 with col2:
                     derechos_emision = st.text_input("Derechos Emisión")
                 with col3:
                     ssoc_camp = st.text_input("S.Soc.Camp.")
-                subtotal = st.text_input("Subtotal")
+                
+                # Calcular Subtotal como suma de Prima Neta + Contrib. S.C.V.S. + Derechos Emisión + S.Soc.Camp.
+                subtotal_calculado = ""
+                try:
+                    prima_neta_valor = float(prima_neta_db) if prima_neta_db else 0.0
+                    contrib_valor = float(contrib_scvs_calculado) if contrib_scvs_calculado else 0.0
+                    derechos_valor = float(derechos_emision) if derechos_emision else 0.0
+                    ssoc_valor = float(ssoc_camp) if ssoc_camp else 0.0
+                    subtotal_valor = prima_neta_valor + contrib_valor + derechos_valor + ssoc_valor
+                    subtotal_calculado = f"{subtotal_valor:.2f}"
+                except ValueError:
+                    subtotal_calculado = "0.00"
+                
+                subtotal = st.text_input(
+                    "Subtotal (Prima Neta + Contrib S.C.V.S. + Derechos + S.Soc.Camp.)",
+                    value=subtotal_calculado,
+                    disabled=True,
+                    help="Calculado automáticamente como la suma de Prima Neta + los campos anteriores"
+                )
                 col1,col2,col3,col4 = st.columns(4)
                 with col1:
-                    iva_15 = st.text_input("IVA (15%)")
+                    # Calcular IVA como 15% de la prima neta
+                    iva_15_calculado = ""
+                    if prima_neta_db:
+                        try:
+                            prima_neta_valor = float(prima_neta_db)
+                            iva_15_valor = prima_neta_valor * 0.15  # 15%
+                            iva_15_calculado = f"{iva_15_valor:.2f}"
+                        except ValueError:
+                            iva_15_calculado = "0.00"
+                    else:
+                        iva_15_calculado = "0.00"
+                    
+                    iva_15 = st.text_input(
+                        "IVA (15% Prima Neta)", 
+                        value=iva_15_calculado,
+                        disabled=True,
+                        help="Calculado automáticamente como 15% de la Prima Neta"
+                    )
                 with col2:
                     csolidaria_2 = st.text_input("C.Solidaria(2%)")
                 with col3:
                     financiacion = st.text_input("Financiación")
                 with col4:
                     otros_iva = st.text_input("Otros IVA")
-                total = st.text_input("Total")
+                
+                # Calcular Total como suma de Subtotal + IVA + C.Solidaria + Financiación + Otros IVA
+                total_calculado = ""
+                try:
+                    subtotal_valor = float(subtotal_calculado) if subtotal_calculado else 0.0
+                    iva_valor = float(iva_15_calculado) if iva_15_calculado else 0.0
+                    csolidaria_valor = float(csolidaria_2) if csolidaria_2 else 0.0
+                    financiacion_valor = float(financiacion) if financiacion else 0.0
+                    otros_iva_valor = float(otros_iva) if otros_iva else 0.0
+                    total_valor = subtotal_valor + iva_valor + csolidaria_valor + financiacion_valor + otros_iva_valor
+                    total_calculado = f"{total_valor:.2f}"
+                except ValueError:
+                    total_calculado = "0.00"
+                
+                total = st.text_input(
+                    "Total (Subtotal + IVA + C.Solidaria + Financiación + Otros IVA)",
+                    value=total_calculado,
+                    disabled=True,
+                    help="Calculado automáticamente como la suma de los componentes de facturación"
+                )
                        
                 guardar_fact = st.button("Guardar datos de facturación")
 
                 if guardar_fact:
                     # Guardar los anexos en una variable separada para manipulación antes de guardar en la base de datos
                     anexos_poliza = [a for a in anexos if a and str(a).strip()]
+                    
+                    # Obtener datos de la relación asegurado-contratante
+                    poliza_data = st.session_state.get("poliza_form_data", {})
+                    
                     st.session_state["facturacion_data"] = {
                         "tipo_renovacion": tipo_renovacion,
                         "tipo_movimiento": tipo_movimiento,
                         "gestion_cobro": selected_ejecutivo[0] if selected_ejecutivo else None,
                         "liberacion_comision": liberacion_comision,
-                        "ramo_id": selected_ramo[0] if selected_ramo else None,
-                        "prima": prima,
-                        "suma_asegurada": suma_asegurada,
-                        # "deducible": deducible,  # Eliminado
-                        # "cobertura": cobertura,  # Eliminado
-                        "observaciones_poliza": observaciones_poliza,
+                        "ramo_id": None,
+                        "suma_asegurada": suma_asegurada_db,
+                        "prima_neta": prima_neta_db,
+                        "observaciones_poliza": observaciones_ramos,
                         "numero_factura": numero_factura,
                         "moneda": moneda,
                         "clausulas_particulares": clausulas_particulares,
@@ -419,10 +775,13 @@ def crud_polizas():
                         "otros_iva": otros_iva,
                         "total": total,
                         "cuotas": cuotas,
-                        # Guardar anexos como string serializado para la base de datos
-                        "anexos_poliza": str(anexos_poliza),  # Guardar en la columna anexos_poliza
+                        "anexos_poliza": str(anexos_poliza),
                         "tipo_factura": tipo_factura,
                         "agrupadora": selected_agrupadora[0] if selected_agrupadora else None,
+                        # Nuevos campos de beneficiario
+                        "asegurado_contratante": asegurado_contratante,
+                        "beneficiario": beneficiario_nombre if asegurado_contratante == "No" else "",
+                        "id_beneficiario": id_beneficiario if asegurado_contratante == "No" else "",
                     }
                     # --- CREAR POLIZA EN LA BASE DE DATOS ---
                     poliza_data = st.session_state.get("poliza_form_data", {})
@@ -524,9 +883,9 @@ def crud_polizas():
                 # Mostrar suma asegurada
                 suma_asegurada = poliza_dict.get("suma_asegurada", "")
                 result["suma_asegurada"] = suma_asegurada if suma_asegurada else "(Sin suma asegurada)"
-                # Mostrar prima
-                prima = poliza_dict.get("prima", "")
-                result["prima"] = prima if prima else "(Sin prima)"
+                # Mostrar prima neta
+                prima_neta = poliza_dict.get("prima_neta", "")
+                result["prima_neta"] = prima_neta if prima_neta else "(Sin prima neta)"
                 # Mostrar anexos desde la columna anexos_poliza
                 anexos_poliza = poliza_dict.get("anexos_poliza", "")
                 anexos_list = []
@@ -684,23 +1043,163 @@ def crud_polizas():
                         conn.close()
 
     elif operation == "Borrar":
+        st.warning("⚠️ **Atención**: Esta acción eliminará permanentemente la póliza seleccionada.")
+        
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, numero_poliza FROM polizas")
+        cursor.execute("SELECT id, numero_poliza FROM polizas ORDER BY numero_poliza")
         polizas = cursor.fetchall()
+        
         if not polizas:
-            st.info("No hay pólizas registradas.")
+            st.info("No hay pólizas registradas para eliminar.")
             conn.close()
             return
-        selected_poliza = st.selectbox("Selecciona una póliza para eliminar", polizas, format_func=lambda x: x[1])
-        if st.button("Eliminar Póliza"):
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            try:
-                cursor.execute("DELETE FROM polizas WHERE id = ?", (selected_poliza[0],))
-                conn.commit()
-                st.success("Póliza eliminada exitosamente")
-            except sqlite3.IntegrityError:
-                st.error("No se puede eliminar la póliza.")
-            finally:
-                conn.close()
+        
+        # Mostrar información de la póliza antes de eliminar
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            selected_poliza = st.selectbox(
+                "Selecciona la póliza a eliminar", 
+                polizas, 
+                format_func=lambda x: f"Póliza: {x[1]} (ID: {x[0]})",
+                help="Seleccione la póliza que desea eliminar del sistema"
+            )
+        
+        if selected_poliza:
+            # Verificar qué columnas existen en la tabla
+            cursor.execute("PRAGMA table_info(polizas)")
+            existing_columns = [row[1] for row in cursor.fetchall()]
+            
+            # Construir la consulta solo con columnas que existan
+            select_fields = ["numero_poliza"]
+            if "tomador_id" in existing_columns:
+                select_fields.append("tomador_id")
+            elif "cliente_id" in existing_columns:
+                select_fields.append("cliente_id")
+            else:
+                select_fields.append("NULL as tomador_id")
+                
+            if "aseguradora_id" in existing_columns:
+                select_fields.append("aseguradora_id")
+            else:
+                select_fields.append("NULL as aseguradora_id")
+                
+            if "fecha_inicio" in existing_columns:
+                select_fields.append("fecha_inicio")
+            else:
+                select_fields.append("NULL as fecha_inicio")
+                
+            if "fecha_fin" in existing_columns:
+                select_fields.append("fecha_fin")
+            else:
+                select_fields.append("NULL as fecha_fin")
+                
+            if "estado_poliza" in existing_columns:
+                select_fields.append("estado_poliza")
+            elif "estado" in existing_columns:
+                select_fields.append("estado")
+            else:
+                select_fields.append("NULL as estado_poliza")
+            
+            # Obtener detalles de la póliza seleccionada
+            query = f"SELECT {', '.join(select_fields)} FROM polizas WHERE id=?"
+            cursor.execute(query, (selected_poliza[0],))
+            poliza_details = cursor.fetchone()
+            
+            if poliza_details:
+                numero_poliza = poliza_details[0]
+                tomador_id = poliza_details[1] if len(poliza_details) > 1 else None
+                aseguradora_id = poliza_details[2] if len(poliza_details) > 2 else None
+                fecha_inicio = poliza_details[3] if len(poliza_details) > 3 else None
+                fecha_fin = poliza_details[4] if len(poliza_details) > 4 else None
+                estado_poliza = poliza_details[5] if len(poliza_details) > 5 else None
+                
+                # Obtener nombre del tomador
+                tomador_name = "Sin tomador"
+                if tomador_id:
+                    try:
+                        cursor.execute("SELECT tipo_cliente, nombres, apellidos, razon_social FROM clients WHERE id=?", (tomador_id,))
+                        client_info = cursor.fetchone()
+                        if client_info:
+                            tomador_name = client_info[3] if client_info[0] == "Empresa" else f"{client_info[1]} {client_info[2]}"
+                        else:
+                            tomador_name = "Cliente no encontrado"
+                    except Exception:
+                        tomador_name = "Error al obtener cliente"
+                
+                # Obtener nombre de aseguradora
+                aseguradora_name = "Sin aseguradora"
+                if aseguradora_id:
+                    try:
+                        cursor.execute("SELECT razon_social FROM aseguradoras WHERE id=?", (aseguradora_id,))
+                        aseg_info = cursor.fetchone()
+                        aseguradora_name = aseg_info[0] if aseg_info else "Aseguradora no encontrada"
+                    except Exception:
+                        aseguradora_name = "Error al obtener aseguradora"
+                
+                # Mostrar información de la póliza
+                st.markdown("### 📄 Información de la Póliza a Eliminar")
+                
+                info_data = {
+                    "Campo": ["Número de Póliza", "Tomador", "Aseguradora", "Vigencia", "Estado"],
+                    "Valor": [
+                        numero_poliza or "Sin número",
+                        tomador_name,
+                        aseguradora_name,
+                        f"{fecha_inicio} a {fecha_fin}" if fecha_inicio and fecha_fin else "Sin vigencia",
+                        estado_poliza if estado_poliza else "Sin estado"
+                    ]
+                }
+                
+                import pandas as pd
+                df_info = pd.DataFrame(info_data)
+                st.dataframe(df_info, use_container_width=True, hide_index=True)
+                
+                st.divider()
+                
+                # Confirmación de eliminación
+                st.markdown("### 🗑️ Confirmación de Eliminación")
+                
+                col1, col2, col3 = st.columns([1, 1, 1])
+                
+                with col2:
+                    confirmar = st.checkbox(
+                        "Confirmo que deseo eliminar esta póliza permanentemente",
+                        help="Marque esta casilla para habilitar el botón de eliminación"
+                    )
+                
+                st.markdown("")  # Espacio
+                
+                # Botón de eliminación
+                col1, col2, col3 = st.columns([1, 1, 1])
+                
+                with col2:
+                    if st.button(
+                        "🗑️ ELIMINAR PÓLIZA", 
+                        disabled=not confirmar,
+                        type="primary" if confirmar else "secondary",
+                        use_container_width=True
+                    ):
+                        try:
+                            cursor.execute("DELETE FROM polizas WHERE id = ?", (selected_poliza[0],))
+                            conn.commit()
+                            st.success(f"✅ Póliza '{numero_poliza}' eliminada exitosamente.")
+                            st.balloons()
+                            
+                            # Limpiar session state para refrescar la lista
+                            if "poliza_form_data" in st.session_state:
+                                del st.session_state["poliza_form_data"]
+                            
+                            # Rerun para actualizar la interfaz
+                            st.rerun()
+                            
+                        except sqlite3.Error as e:
+                            st.error(f"❌ Error al eliminar la póliza: {str(e)}")
+                        except Exception as e:
+                            st.error(f"❌ Error inesperado: {str(e)}")
+            else:
+                st.error("No se pudieron obtener los detalles de la póliza seleccionada.")
+        
+        conn.close()
+

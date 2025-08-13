@@ -1,0 +1,242 @@
+[
+  {
+    "id": 1,
+    "RAMO": "Accidentes Colectivos",
+    "nombre": "Accidentes Colectivos",
+    "descripcion": "Cobertura para accidentes en grupos de personas"
+  },
+  {
+    "id": 2,
+    "RAMO": "Accidentes Personales",
+    "nombre": "Accidentes Personales", 
+    "descripcion": "Cobertura individual contra accidentes"
+  },
+  {
+    "id": 3,
+    "RAMO": "Asistencia Medica",
+    "nombre": "Asistencia Medica",
+    "descripcion": "Servicios de asistencia médica y sanitaria"
+  },
+  {
+    "id": 4,
+    "RAMO": "Aviación",
+    "nombre": "Aviación",
+    "descripcion": "Seguros para aeronaves y riesgos de aviación"
+  },
+  {
+    "id": 5,
+    "RAMO": "Bancos e Instituciones Financieras (BBB)",
+    "nombre": "Bancos e Instituciones Financieras (BBB)",
+    "descripcion": "Cobertura específica para entidades financieras"
+  },
+  {
+    "id": 6,
+    "RAMO": "Buen Uso de Anticipo",
+    "nombre": "Buen Uso de Anticipo",
+    "descripcion": "Garantía de buen uso de anticipos contractuales"
+  },
+  {
+    "id": 7,
+    "RAMO": "Crédito a las Exportaciones",
+    "nombre": "Crédito a las Exportaciones",
+    "descripcion": "Cobertura para operaciones de exportación"
+  },
+  {
+    "id": 8,
+    "RAMO": "Crédito Interno",
+    "nombre": "Crédito Interno",
+    "descripcion": "Seguro de crédito para operaciones domésticas"
+  },
+  {
+    "id": 9,
+    "RAMO": "Cumplimiento de Contrato",
+    "nombre": "Cumplimiento de Contrato",
+    "descripcion": "Garantía de cumplimiento contractual"
+  },
+  {
+    "id": 10,
+    "RAMO": "Dinero y Valores",
+    "nombre": "Dinero y Valores",
+    "descripcion": "Cobertura para dinero en efectivo y valores"
+  },
+  {
+    "id": 11,
+    "RAMO": "Ejecución de Obra y Buena Calidad de Materiales",
+    "nombre": "Ejecución de Obra y Buena Calidad de Materiales",
+    "descripcion": "Garantías para proyectos de construcción"
+  },
+  {
+    "id": 12,
+    "RAMO": "Equipo Electronico",
+    "nombre": "Equipo Electronico",
+    "descripcion": "Cobertura para equipos electrónicos y tecnológicos"
+  },
+  {
+    "id": 13,
+    "RAMO": "Equipo y Maquinaria Contratistas",
+    "nombre": "Equipo y Maquinaria Contratistas",
+    "descripcion": "Seguro para maquinaria de construcción"
+  },
+  {
+    "id": 14,
+    "RAMO": "Fidelidad",
+    "nombre": "Fidelidad",
+    "descripcion": "Cobertura contra actos de infidelidad de empleados"
+  },
+  {
+    "id": 15,
+    "RAMO": "Garantías Aduaneras",
+    "nombre": "Garantías Aduaneras",
+    "descripcion": "Garantías para operaciones aduaneras"
+  },
+  {
+    "id": 16,
+    "RAMO": "Incendios y Aliadas",
+    "nombre": "Incendios y Aliadas",
+    "descripcion": "Cobertura contra incendios y riesgos conexos"
+  },
+  {
+    "id": 17,
+    "RAMO": "Lucro Cesante de Riesgos Catastróficos",
+    "nombre": "Lucro Cesante de Riesgos Catastróficos",
+    "descripcion": "Pérdida de beneficios por eventos catastróficos"
+  },
+  {
+    "id": 18,
+    "RAMO": "Lucro Cesante por Incendio y Lineas Aliadas",
+    "nombre": "Lucro Cesante por Incendio y Lineas Aliadas",
+    "descripcion": "Pérdida de beneficios por incendio"
+  },
+  {
+    "id": 19,
+    "RAMO": "Maritimo",
+    "nombre": "Maritimo",
+    "descripcion": "Seguros marítimos y de transporte acuático"
+  },
+  {
+    "id": 20,
+    "RAMO": "Montaje de Maquinaria",
+    "nombre": "Montaje de Maquinaria",
+    "descripcion": "Cobertura durante el montaje de equipos"
+  },
+  {
+    "id": 21,
+    "RAMO": "Multiriesgo",
+    "nombre": "Multiriesgo",
+    "descripcion": "Cobertura integral para múltiples riesgos"
+  },
+  {
+    "id": 22,
+    "RAMO": "Multiriesgo Comercial",
+    "nombre": "Multiriesgo Comercial",
+    "descripcion": "Cobertura integral para comercios"
+  },
+  {
+    "id": 23,
+    "RAMO": "Multiriesgo de Maquinaria",
+    "nombre": "Multiriesgo de Maquinaria",
+    "descripcion": "Cobertura integral para maquinaria industrial"
+  },
+  {
+    "id": 24,
+    "RAMO": "Multiriesgo Hogar",
+    "nombre": "Multiriesgo Hogar",
+    "descripcion": "Cobertura integral para el hogar"
+  },
+  {
+    "id": 25,
+    "RAMO": "Multiriesgo Industrial",
+    "nombre": "Multiriesgo Industrial",
+    "descripcion": "Cobertura integral para industrias"
+  },
+  {
+    "id": 26,
+    "RAMO": "Obras Civiles Terminadas",
+    "nombre": "Obras Civiles Terminadas",
+    "descripcion": "Cobertura para obras de construcción finalizadas"
+  },
+  {
+    "id": 27,
+    "RAMO": "Otras Garantías",
+    "nombre": "Otras Garantías",
+    "descripcion": "Garantías diversas no clasificadas"
+  },
+  {
+    "id": 28,
+    "RAMO": "Perdida de Beneficios por Rotura de Maquinaria",
+    "nombre": "Perdida de Beneficios por Rotura de Maquinaria",
+    "descripcion": "Cobertura por pérdidas debido a rotura de equipos"
+  },
+  {
+    "id": 29,
+    "RAMO": "Responsabilidad Civil",
+    "nombre": "Responsabilidad Civil",
+    "descripcion": "Cobertura por responsabilidad civil general"
+  },
+  {
+    "id": 30,
+    "RAMO": "Riesgos Especiales",
+    "nombre": "Riesgos Especiales",
+    "descripcion": "Cobertura para riesgos no estándar"
+  },
+  {
+    "id": 31,
+    "RAMO": "Robo",
+    "nombre": "Robo",
+    "descripcion": "Cobertura contra hurto y robo"
+  },
+  {
+    "id": 32,
+    "RAMO": "Rotura de Maquinarias",
+    "nombre": "Rotura de Maquinarias",
+    "descripcion": "Cobertura por daños a maquinaria"
+  },
+  {
+    "id": 33,
+    "RAMO": "Seriedad de Oferta",
+    "nombre": "Seriedad de Oferta",
+    "descripcion": "Garantía de seriedad en licitaciones"
+  },
+  {
+    "id": 34,
+    "RAMO": "Terremoto",
+    "nombre": "Terremoto",
+    "descripcion": "Cobertura específica contra terremotos"
+  },
+  {
+    "id": 35,
+    "RAMO": "Todo Riesgo de Contratistas",
+    "nombre": "Todo Riesgo de Contratistas",
+    "descripcion": "Cobertura integral para contratistas"
+  },
+  {
+    "id": 36,
+    "RAMO": "Todo Riesgo Petrolero",
+    "nombre": "Todo Riesgo Petrolero",
+    "descripcion": "Cobertura especializada para sector petrolero"
+  },
+  {
+    "id": 37,
+    "RAMO": "Transporte",
+    "nombre": "Transporte",
+    "descripcion": "Seguros de transporte terrestre"
+  },
+  {
+    "id": 38,
+    "RAMO": "Vehiculos",
+    "nombre": "Vehiculos",
+    "descripcion": "Seguros de automóviles y vehículos"
+  },
+  {
+    "id": 39,
+    "RAMO": "Vida Colectiva",
+    "nombre": "Vida Colectiva",
+    "descripcion": "Seguros de vida para grupos"
+  },
+  {
+    "id": 40,
+    "RAMO": "Vida Individual",
+    "nombre": "Vida Individual",
+    "descripcion": "Seguros de vida personal"
+  }
+]

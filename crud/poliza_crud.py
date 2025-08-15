@@ -26,10 +26,11 @@ def get_client_options():
     conn.close()
     options = []
     for c in clients:
-        if c[1] == "Empresa":
-            label = f"{c[4]} (Empresa) [ID: {c[0]}]"
+        # Mostrar Razón Social si es Persona Jurídica, nombre y apellido si es Persona Natural
+        if c[1] == "Persona Jurídica":
+            label = f"{c[4]} (Persona Jurídica) [ID: {c[0]}]"
         else:
-            label = f"{c[2]} {c[3]} (Individual) [ID: {c[0]}]"
+            label = f"{c[2]} {c[3]} (Persona Natural) [ID: {c[0]}]"
         options.append((c[0], label))
     return options
 
@@ -179,7 +180,10 @@ def crud_polizas():
         ("financiacion", "TEXT"),
         ("otros_iva", "TEXT"),
         ("total", "TEXT"),
+        ("formas_de_pago", "TEXT"),  # <-- Nuevo campo
         ("cuotas", "TEXT"),
+        ("valor_cuota_inicial", "TEXT"),
+        ("valor_cuotas_financiadas", "TEXT"),
         ("fecha_factura", "TEXT"),
     ]
     conn = sqlite3.connect(DB_FILE)
@@ -639,11 +643,35 @@ def crud_polizas():
                 with col1:
                     cuotas = st.text_input("Cuotas", key="cuotas_form2")
                 with col2:
-                    anexos = []
-                    num_anexos = st.number_input("Cantidad de Anexos", min_value=0, max_value=10, value=0, step=1)
-                    for i in range(num_anexos):
-                        anexo = st.text_input(f"Anexo {i+1}", key=f"anexo_{i+1}")
-                        anexos.append(anexo)
+                    # ...existing code...
+                    pass
+                # Campo Valor de Cuota inicial (USD)
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    valor_cuota_inicial = st.text_input(
+                        "Valor de Cuota inicial",
+                        help="Ingrese el valor de la cuota inicial (USD)",
+                        placeholder="Ej: 100.00"
+                    )
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("**USD $**")
+                # Campo Valor de cuotas financiadas (USD)
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    valor_cuotas_financiadas = st.text_input(
+                        "Valor de cuotas financiadas",
+                        help="Ingrese el valor de las cuotas financiadas (USD)",
+                        placeholder="Ej: 200.00"
+                    )
+                with col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("**USD $**")
+                # Añadir campo formas_de_pago como selectbox
+                formas_de_pago = st.selectbox(
+                    "Forma de Pago",
+                    ["Tarjeta de crédito", "Transferencia", "Débito", "Refinanciamiento"]
+                )
                 # Tipo de Factura después de anexos
                 tipo_factura = st.selectbox("Tipo de Factura", ["Física", "Electrónica", "Otro"])
                 
@@ -651,8 +679,9 @@ def crud_polizas():
                 col1, col2 = st.columns(2)
                 with col1:
                     numero_factura = st.text_input("Nº Factura")
-                with col2:
-                    moneda = st.selectbox("Moneda", ["USD", "EUR", "Otra"])
+                # Eliminar el campo de moneda
+                # with col2:
+                #     moneda = st.selectbox("Moneda", ["USD", "EUR", "Otra"])
                 clausulas_particulares = st.text_area("Cláusulas particulares")
                 col1, col2 ,col3 = st.columns(3)
                 with col1:
@@ -744,11 +773,19 @@ def crud_polizas():
                     help="Calculado automáticamente como la suma de los componentes de facturación"
                 )
                        
+                # Añadir campo para anexos (puede ser un uploader de archivos o un campo de texto)
+                anexos = st.text_area(
+                    "Anexos (separados por coma)",
+                    help="Ingrese los nombres de los anexos o archivos relacionados, separados por coma",
+                    placeholder="Ej: anexo1.pdf, anexo2.jpg"
+                )
+                anexos_list = [a.strip() for a in anexos.split(",")] if anexos else []
+
                 guardar_fact = st.button("Guardar datos de facturación")
 
                 if guardar_fact:
                     # Guardar los anexos en una variable separada para manipulación antes de guardar en la base de datos
-                    anexos_poliza = [a for a in anexos if a and str(a).strip()]
+                    anexos_poliza = [a for a in anexos_list if a and str(a).strip()]
                     
                     # Obtener datos de la relación asegurado-contratante
                     poliza_data = st.session_state.get("poliza_form_data", {})
@@ -763,7 +800,6 @@ def crud_polizas():
                         "prima_neta": prima_neta_db,
                         "observaciones_poliza": observaciones_ramos,
                         "numero_factura": numero_factura,
-                        "moneda": moneda,
                         "clausulas_particulares": clausulas_particulares,
                         "contrib_scvs": contrib_scvs,
                         "derechos_emision": derechos_emision,
@@ -775,6 +811,8 @@ def crud_polizas():
                         "otros_iva": otros_iva,
                         "total": total,
                         "cuotas": cuotas,
+                        "valor_cuota_inicial": valor_cuota_inicial,
+                        "valor_cuotas_financiadas": valor_cuotas_financiadas,  # <-- Guardar en la base de datos
                         "anexos_poliza": str(anexos_poliza),
                         "tipo_factura": tipo_factura,
                         "agrupadora": selected_agrupadora[0] if selected_agrupadora else None,
@@ -782,6 +820,7 @@ def crud_polizas():
                         "asegurado_contratante": asegurado_contratante,
                         "beneficiario": beneficiario_nombre if asegurado_contratante == "No" else "",
                         "id_beneficiario": id_beneficiario if asegurado_contratante == "No" else "",
+                        "formas_de_pago": formas_de_pago,  # <-- Asegúrate de que esto está aquí
                     }
                     # --- CREAR POLIZA EN LA BASE DE DATOS ---
                     poliza_data = st.session_state.get("poliza_form_data", {})
@@ -799,6 +838,11 @@ def crud_polizas():
                             insert_data = {**poliza_data, **facturacion_data}
                             cursor.execute("PRAGMA table_info(polizas)")
                             poliza_cols = [row[1] for row in cursor.fetchall() if row[1] != "id"]
+                            # --- Asegura que formas_de_pago esté en poliza_cols ---
+                            if "formas_de_pago" not in poliza_cols:
+                                cursor.execute("ALTER TABLE polizas ADD COLUMN formas_de_pago TEXT")
+                                poliza_cols.append("formas_de_pago")
+                            # --- FIN FIX ---
                             insert_fields = []
                             insert_values = []
                             for col in poliza_cols:
@@ -835,7 +879,10 @@ def crud_polizas():
         agrupadoras_dict = {row[0]: row[1] for row in cursor.fetchall()}
         # Obtener clientes para mostrar nombre/razón social del tomador
         cursor.execute("SELECT id, tipo_cliente, nombres, apellidos, razon_social FROM clients")
-        clientes_dict = {row[0]: (row[4] if row[1] == "Empresa" else f"{row[2]} {row[3]}") for row in cursor.fetchall()}
+        clientes_dict = {
+            row[0]: (row[4] if row[1] == "Persona Jurídica" else f"{row[2]} {row[3]}")
+            for row in cursor.fetchall()
+        }
         conn.close()
 
         import json

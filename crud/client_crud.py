@@ -35,7 +35,7 @@ def create_client(**data):
         ''', tuple(data.values()))
         conn.commit()
         # Mensaje personalizado según tipo_cliente
-        if data.get("tipo_cliente") == "Empresa":
+        if data.get("tipo_cliente") == "Persona Jurídica":
             nombre_cliente = data.get("razon_social", "Empresa sin nombre")
         else:
             nombre_cliente = f"{data.get('nombres', 'N/A')} {data.get('apellidos', 'N/A')}"
@@ -96,9 +96,9 @@ def crud_clientes():
     operation = st.selectbox("Selecciona una operación", ["Crear", "Leer", "Modificar", "Borrar"], key="crud_clientes_operation")
 
     if operation == "Crear":
-        tipo_cliente = st.selectbox("Tipo de Cliente", ["Individual", "Empresa"])
-        if tipo_cliente == "Individual":
-            with st.form("form_cliente_individual"):
+        tipo_cliente = st.selectbox("Tipo de Cliente", ["Persona Natural", "Persona Jurídica"])
+        if tipo_cliente == "Persona Natural":
+            with st.form("form_cliente_persona_natural"):
                 tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte"])
                 col1, col2 = st.columns(2)
                 with col1:
@@ -246,7 +246,7 @@ def crud_clientes():
                     else:
                         st.error("Completa todos los campos obligatorios.")
         else:
-            with st.form("form_cliente_empresa"):
+            with st.form("form_cliente_persona_juridica"):
                 razon_social = st.text_input("Razón Social")
                 col1, col2 = st.columns(2)
                 with col1:
@@ -380,6 +380,11 @@ def crud_clientes():
         if clients:
             import pandas as pd
             df = pd.DataFrame(clients)
+            # Cambiar los valores de tipo_cliente en el DataFrame para mostrar los nuevos nombres
+            df["tipo_cliente"] = df["tipo_cliente"].replace({
+                "Individual": "Persona Natural",
+                "Empresa": "Persona Jurídica"
+            })
             st.dataframe(df)
         else:
             st.info("No hay clientes registrados.")
@@ -394,10 +399,11 @@ def crud_clientes():
         # Construir opciones para el selectbox
         client_options = []
         for client in clients:
-            if client.get("tipo_cliente") == "Empresa":
-                label = f"{client.get('razon_social', '')} (Empresa) [ID: {client['id']}]"
+            tipo_cliente = client.get("tipo_cliente")
+            if tipo_cliente == "Persona Jurídica" or tipo_cliente == "Empresa":
+                label = f"{client.get('razon_social', '')} (Persona Jurídica) [ID: {client['id']}]"
             else:
-                label = f"{client.get('nombres', '')} {client.get('apellidos', '')} (Individual) [ID: {client['id']}]"
+                label = f"{client.get('nombres', '')} {client.get('apellidos', '')} (Persona Natural) [ID: {client['id']}]"
             client_options.append((client["id"], label))
 
         selected = st.selectbox("Selecciona un cliente para modificar", client_options, format_func=lambda x: x[1] if x else "")
@@ -405,9 +411,9 @@ def crud_clientes():
         selected_client = next((c for c in clients if c["id"] == selected_id), None)
 
         if selected_client:
-            tipo_cliente = selected_client.get("tipo_cliente", "Individual")
-            if tipo_cliente == "Individual":
-                with st.form("form_modificar_cliente_individual"):
+            tipo_cliente = selected_client.get("tipo_cliente", "Persona Natural")
+            if tipo_cliente == "Persona Natural" or tipo_cliente == "Individual":
+                with st.form("form_modificar_cliente_persona_natural"):
                     tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte"], index=["Cédula", "Pasaporte"].index(selected_client.get("tipo_documento", "Cédula")))
                     col1, col2 = st.columns(2)
                     with col1:
@@ -536,7 +542,7 @@ def crud_clientes():
                         )
                         st.success(result)
             else:
-                with st.form("form_modificar_cliente_empresa"):
+                with st.form("form_modificar_cliente_persona_juridica"):
                     razon_social = st.text_input("Razón Social", value=selected_client.get("razon_social", ""))
                     col1, col2 = st.columns(2)
                     with col1:
@@ -606,7 +612,7 @@ def crud_clientes():
                     if submitted:
                         result = update_client(
                             selected_client.get("correo_electronico"),
-                            tipo_cliente=tipo_cliente,
+                            tipo_cliente="Persona Jurídica",
                             nombres=None,
                             apellidos=None,
                             razon_social=razon_social,
@@ -641,10 +647,11 @@ def crud_clientes():
         # Construir opciones para el selectbox
         client_options = []
         for client in clients:
-            if client.get("tipo_cliente") == "Empresa":
-                label = f"{client.get('razon_social', '')} (Empresa) [ID: {client['id']}]"
+            tipo_cliente = client.get("tipo_cliente")
+            if tipo_cliente == "Persona Jurídica" or tipo_cliente == "Empresa":
+                label = f"{client.get('razon_social', '')} (Persona Jurídica) [ID: {client['id']}]"
             else:
-                label = f"{client.get('nombres', '')} {client.get('apellidos', '')} (Individual) [ID: {client['id']}]"
+                label = f"{client.get('nombres', '')} {client.get('apellidos', '')} (Persona Natural) [ID: {client['id']}]"
             client_options.append((client["id"], label))
 
         selected = st.selectbox("Selecciona un cliente para eliminar", client_options, format_func=lambda x: x[1] if x else "")
@@ -671,3 +678,17 @@ def _parse_date(val):
             return datetime.datetime.fromisoformat(val).date()
         except Exception:
             return datetime.date.today()
+
+def actualizar_tipo_cliente_en_db():
+    """
+    Actualiza los valores antiguos de tipo_cliente en la base de datos a los nuevos valores.
+    Ejecutar una sola vez después del cambio de nomenclatura.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE clients SET tipo_cliente = 'Persona Natural' WHERE tipo_cliente = 'Individual'")
+        cursor.execute("UPDATE clients SET tipo_cliente = 'Persona Jurídica' WHERE tipo_cliente = 'Empresa'")
+        conn.commit()
+    finally:
+        conn.close()

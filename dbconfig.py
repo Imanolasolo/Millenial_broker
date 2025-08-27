@@ -195,6 +195,30 @@ def initialize_database():
     ''')
     print("Aseguradora-Ramos table ensured.")
 
+    # Crear tabla movimientos_poliza si no existe
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS movimientos_poliza (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo_movimiento TEXT UNIQUE,
+            poliza_id INTEGER,
+            cliente_id INTEGER,
+            fecha_movimiento TEXT,
+            tipo_movimiento TEXT,
+            estado TEXT DEFAULT 'Proceso',
+            suma_asegurada_nueva REAL,
+            prima_nueva REAL,
+            direccion_nueva TEXT,
+            pdf_documento TEXT,
+            observaciones TEXT,
+            usuario_id INTEGER,
+            fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(poliza_id) REFERENCES polizas(id),
+            FOREIGN KEY(cliente_id) REFERENCES clients(id),
+            FOREIGN KEY(usuario_id) REFERENCES users(id)
+        )
+    ''')
+    print("Movimientos_Poliza table ensured.")
+
     conn.commit()
     conn.close()
     print("Database initialization complete.")

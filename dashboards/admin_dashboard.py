@@ -19,6 +19,7 @@ from crud.agencias_crud import crud_agencias
 from crud.role_crud import crud_roles
 from crud.poliza_crud import crud_polizas
 from crud.ramos_crud import crud_ramos
+from crud.movimiento_crud import crud_movimientos
 
 def get_pdf_text(pdf_list):
     text = ""
@@ -173,6 +174,7 @@ def admin_dashboard():
     produccion_modulos = [
         ("Pólizas", "Pólizas"),
         ("Ramos de Seguros", "Ramos de Seguros"),
+        ("Movimientos", "Movimientos"),
     ]
     selected_produccion = st.sidebar.selectbox(
         "Producción",
@@ -200,6 +202,8 @@ def admin_dashboard():
         crud_polizas()
     elif module == "Ramos de Seguros":
         crud_ramos()
+    elif module == "Movimientos":
+        crud_movimientos()
     # ...puedes agregar más elif para otros módulos si creas sus archivos...
 
     # Botón de Logout

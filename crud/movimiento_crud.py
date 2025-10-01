@@ -1,6 +1,14 @@
 import streamlit as st
 import sqlite3
 from dbconfig import DB_FILE, initialize_database
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+import io
+from datetime import datetime as dt, date
 
 def tipos_movimiento_permitidos():
     return [
@@ -36,7 +44,106 @@ def get_campos_por_tipo_movimiento(tipo_movimiento):
     }
     return campos_mapping.get(tipo_movimiento, [])
 
-def render_campos_especificos(tipo_movimiento, valores_actuales=None):
+def obtener_datos_actuales_poliza(poliza_id):
+    """Obtiene los datos actuales de la póliza para mostrar como referencia"""
+    if not poliza_id:
+        return None
+    
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    try:
+        # Obtener información básica de la póliza incluyendo suma_asegurada y prima_neta
+        cursor.execute("""
+            SELECT numero_poliza, prima_neta, cobertura, tipo_poliza, estado, observaciones, suma_asegurada
+            FROM polizas 
+            WHERE id = ?
+        """, (poliza_id,))
+        
+        poliza_data = cursor.fetchone()
+        if not poliza_data:
+            return None
+        
+        # Obtener sumas aseguradas de los ramos asociados
+        cursor.execute("""
+            SELECT pr.suma_asegurada, rs.nombre, pr.prima
+            FROM poliza_ramos pr
+            JOIN ramos_seguros rs ON pr.ramo_id = rs.id
+            WHERE pr.poliza_id = ?
+        """, (poliza_id,))
+        
+        ramos_data = cursor.fetchall()
+        
+        # Calcular suma asegurada total
+        suma_asegurada_total = 0
+        prima_ramos_total = 0
+        ramos_info = []
+        
+        for ramo in ramos_data:
+            suma_str = str(ramo[0]).replace(',', '').replace('$', '') if ramo[0] else "0"
+            prima_str = str(ramo[2]).replace(',', '').replace('$', '') if ramo[2] else "0"
+            
+            try:
+                suma_valor = float(suma_str)
+                prima_valor = float(prima_str)
+                suma_asegurada_total += suma_valor
+                prima_ramos_total += prima_valor
+                
+                ramos_info.append({
+                    'ramo': ramo[1],
+                    'suma_asegurada': suma_valor,
+                    'prima': prima_valor
+                })
+            except ValueError:
+                # Si no se puede convertir, usar 0
+                ramos_info.append({
+                    'ramo': ramo[1],
+                    'suma_asegurada': 0,
+                    'prima': 0
+                })
+        
+        # Prima neta y suma asegurada de la póliza
+        prima_neta_str = str(poliza_data[1]).replace(',', '').replace('$', '') if poliza_data[1] else "0"
+        suma_asegurada_principal_str = str(poliza_data[6]).replace(',', '').replace('$', '') if poliza_data[6] else "0"
+        
+        try:
+            prima_neta = float(prima_neta_str)
+        except ValueError:
+            prima_neta = 0
+            
+        try:
+            suma_asegurada_principal = float(suma_asegurada_principal_str)
+        except ValueError:
+            suma_asegurada_principal = 0
+        
+        # Usar la suma asegurada principal si es mayor que la suma de ramos
+        suma_asegurada_final = max(suma_asegurada_principal, suma_asegurada_total) if suma_asegurada_principal > 0 else suma_asegurada_total
+        
+        # Usar la prima neta principal si es mayor que la suma de primas de ramos
+        prima_final = max(prima_neta, prima_ramos_total) if prima_neta > 0 else prima_ramos_total
+        
+        return {
+            'numero_poliza': poliza_data[0],
+            'prima_neta': prima_neta,
+            'prima_final': prima_final,
+            'suma_asegurada_principal': suma_asegurada_principal,
+            'suma_asegurada_total': suma_asegurada_total,
+            'suma_asegurada_final': suma_asegurada_final,
+            'prima_ramos_total': prima_ramos_total,
+            'cobertura': poliza_data[2],
+            'tipo_poliza': poliza_data[3],
+            'estado': poliza_data[4],
+            'ramos_info': ramos_info,
+            'observaciones': poliza_data[5]
+        }
+        
+    except sqlite3.Error as e:
+        st.error(f"Error al obtener datos de la póliza: {e}")
+        return None
+    finally:
+        conn.close()
+
+def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=None):
     """Renderiza los campos específicos según el tipo de movimiento seleccionado"""
     campos = get_campos_por_tipo_movimiento(tipo_movimiento)
     valores = {}
@@ -45,38 +152,390 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None):
         st.info(f"El movimiento '{tipo_movimiento}' no requiere campos adicionales específicos.")
         return valores
     
+    # Obtener datos actuales de la póliza para referencia
+    poliza_datos = obtener_datos_actuales_poliza(poliza_id) if poliza_id else None
+    
     with st.expander(f"📋 Campos específicos para: {tipo_movimiento}", expanded=True):
+        
+        # Mostrar información de referencia si está disponible
+        if poliza_datos and campos:
+            with st.container():
+                st.markdown("#### 📊 **Información Actual de la Póliza (Referencia)**")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if "suma_asegurada_nueva" in campos:
+                        st.metric(
+                            label="Suma Asegurada Actual",
+                            value=f"${poliza_datos['suma_asegurada_final']:,.2f}",
+                            help="Suma total asegurada actual de todos los ramos"
+                        )
+                        
+                        # Mostrar desglose por ramos si hay múltiples
+                        if len(poliza_datos['ramos_info']) > 1:
+                            with st.expander("🔍 Desglose por Ramos", expanded=False):
+                                for ramo_info in poliza_datos['ramos_info']:
+                                    st.write(f"**{ramo_info['ramo']}:** ${ramo_info['suma_asegurada']:,.2f}")
+                
+                with col2:
+                    if "prima_nueva" in campos:
+                        # Mostrar prima principal si existe, sino la suma de ramos
+                        prima_mostrar = poliza_datos['prima_final']
+                        st.metric(
+                            label="Prima Actual",
+                            value=f"${prima_mostrar:,.2f}",
+                            help="Prima actual de la póliza"
+                        )
+                        
+                        # Mostrar desglose de primas por ramos si hay múltiples
+                        if len(poliza_datos['ramos_info']) > 1 and poliza_datos['prima_ramos_total'] > 0:
+                            with st.expander("🔍 Desglose Prima por Ramos", expanded=False):
+                                for ramo_info in poliza_datos['ramos_info']:
+                                    if ramo_info['prima'] > 0:
+                                        st.write(f"**{ramo_info['ramo']}:** ${ramo_info['prima']:,.2f}")
+                
+                with col3:
+                    st.metric(
+                        label="Estado de la Póliza",
+                        value=poliza_datos['estado'],
+                        help="Estado actual de la póliza"
+                    )
+                    st.write(f"**Póliza:** {poliza_datos['numero_poliza']}")
+                    st.write(f"**Tipo:** {poliza_datos['tipo_poliza']}")
+                
+                st.markdown("---")
+        
+        # Renderizar campos específicos
         for campo in campos:
             if campo == "suma_asegurada_nueva":
                 valor_actual = valores_actuales.get(campo, 0.0) if valores_actuales else 0.0
+                
+                # Texto de ayuda mejorado con referencia
+                help_text = "Ingrese la nueva suma asegurada para este movimiento"
+                if poliza_datos:
+                    help_text += f"\n💡 Suma actual: ${poliza_datos['suma_asegurada_final']:,.2f}"
+                
                 valores[campo] = st.number_input(
                     "Nueva Suma Asegurada", 
                     min_value=0.0, 
                     value=float(valor_actual) if valor_actual else 0.0,
                     step=1000.0,
                     format="%.2f",
-                    help="Ingrese la nueva suma asegurada para este movimiento"
+                    help=help_text
                 )
+                
+                # Mostrar comparación si hay valor actual y nuevo
+                if poliza_datos and valores[campo] > 0:
+                    diferencia = valores[campo] - poliza_datos['suma_asegurada_final']
+                    if diferencia != 0:
+                        col_comp1, col_comp2 = st.columns(2)
+                        with col_comp1:
+                            if diferencia > 0:
+                                st.success(f"📈 Aumento: ${diferencia:,.2f}")
+                            else:
+                                st.warning(f"📉 Disminución: ${abs(diferencia):,.2f}")
+                        with col_comp2:
+                            porcentaje = (diferencia / poliza_datos['suma_asegurada_final'] * 100) if poliza_datos['suma_asegurada_final'] > 0 else 0
+                            st.info(f"📊 Cambio: {porcentaje:+.1f}%")
+                            
             elif campo == "prima_nueva":
                 valor_actual = valores_actuales.get(campo, 0.0) if valores_actuales else 0.0
+                
+                # Prima de referencia (principal o suma de ramos)
+                prima_referencia = 0
+                if poliza_datos:
+                    prima_referencia = poliza_datos['prima_final']
+                
+                # Texto de ayuda mejorado con referencia
+                help_text = "Ingrese la nueva prima para este movimiento"
+                if poliza_datos and prima_referencia > 0:
+                    help_text += f"\n💡 Prima actual: ${prima_referencia:,.2f}"
+                
                 valores[campo] = st.number_input(
                     "Nueva Prima", 
                     min_value=0.0, 
                     value=float(valor_actual) if valor_actual else 0.0,
                     step=100.0,
                     format="%.2f",
-                    help="Ingrese la nueva prima para este movimiento"
+                    help=help_text
                 )
+                
+                # Mostrar comparación si hay valor actual y nuevo
+                if poliza_datos and prima_referencia > 0 and valores[campo] > 0:
+                    diferencia = valores[campo] - prima_referencia
+                    if diferencia != 0:
+                        col_comp1, col_comp2 = st.columns(2)
+                        with col_comp1:
+                            if diferencia > 0:
+                                st.success(f"📈 Aumento: ${diferencia:,.2f}")
+                            else:
+                                st.warning(f"📉 Disminución: ${abs(diferencia):,.2f}")
+                        with col_comp2:
+                            porcentaje = (diferencia / prima_referencia * 100) if prima_referencia > 0 else 0
+                            st.info(f"📊 Cambio: {porcentaje:+.1f}%")
+                            
             elif campo == "direccion_nueva":
                 valor_actual = valores_actuales.get(campo, "") if valores_actuales else ""
+                
+                # Mostrar cobertura actual si está disponible
+                if poliza_datos and poliza_datos['cobertura']:
+                    st.markdown("**🏠 Cobertura Actual:**")
+                    st.text_area(
+                        "Cobertura/Direcciones Actuales (Solo Referencia)",
+                        value=poliza_datos['cobertura'],
+                        height=60,
+                        disabled=True,
+                        help="Esta es la cobertura actual de la póliza para su referencia"
+                    )
+                
                 valores[campo] = st.text_area(
-                    "Nueva Dirección", 
+                    "Nueva Dirección/Cobertura", 
                     value=str(valor_actual) if valor_actual else "",
                     height=100,
                     help="Ingrese la nueva dirección o las direcciones a incluir/excluir"
                 )
     
     return valores
+
+def generar_pdf_movimiento(codigo_movimiento, fecha_movimiento, tipo_movimiento, poliza_info, cliente_info, campos_especificos, observaciones, estado):
+    """Genera un PDF con la información del movimiento"""
+    buffer = io.BytesIO()
+    
+    # Configurar el documento
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    
+    # Obtener estilos
+    styles = getSampleStyleSheet()
+    
+    # Crear estilos personalizados
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        textColor=colors.darkblue
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceAfter=12,
+        textColor=colors.darkblue
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=6,
+        alignment=TA_JUSTIFY
+    )
+    
+    # Contenido del PDF
+    story = []
+    
+    # Título principal
+    story.append(Paragraph("MILLENIAL BROKER", title_style))
+    story.append(Paragraph("Documento de Movimiento de Póliza", subtitle_style))
+    story.append(Spacer(1, 20))
+    
+    # Información básica del movimiento
+    story.append(Paragraph("INFORMACIÓN DEL MOVIMIENTO", subtitle_style))
+    
+    movimiento_data = [
+        ['Código de Movimiento:', codigo_movimiento],
+        ['Fecha del Movimiento:', fecha_movimiento.strftime("%d/%m/%Y") if isinstance(fecha_movimiento, date) else str(fecha_movimiento)],
+        ['Tipo de Movimiento:', tipo_movimiento],
+        ['Estado:', estado],
+        ['Fecha de Generación:', dt.now().strftime("%d/%m/%Y %H:%M:%S")]
+    ]
+    
+    movimiento_table = Table(movimiento_data, colWidths=[2.5*inch, 3.5*inch])
+    movimiento_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('BACKGROUND', (1, 0), (1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    
+    story.append(movimiento_table)
+    story.append(Spacer(1, 20))
+    
+    # Información de la póliza
+    if poliza_info:
+        story.append(Paragraph("INFORMACIÓN DE LA PÓLIZA", subtitle_style))
+        
+        # Formatear prima y suma asegurada correctamente
+        prima_formateada = f"${poliza_info.get('prima', 0):,.2f}" if isinstance(poliza_info.get('prima'), (int, float)) else f"${poliza_info.get('prima', 'N/A')}"
+        suma_formateada = f"${poliza_info.get('suma_asegurada', 0):,.2f}" if isinstance(poliza_info.get('suma_asegurada'), (int, float)) else f"${poliza_info.get('suma_asegurada', 'N/A')}"
+        
+        poliza_data = [
+            ['Número de Póliza:', poliza_info.get('numero_poliza', 'N/A')],
+            ['Tipo de Póliza:', poliza_info.get('tipo_poliza', 'N/A')],
+            ['Prima Actual:', prima_formateada],
+            ['Suma Asegurada Actual:', suma_formateada],
+            ['Estado de la Póliza:', poliza_info.get('estado', 'N/A')],
+            ['Fecha de Inicio:', poliza_info.get('fecha_inicio', 'N/A')],
+            ['Fecha de Fin:', poliza_info.get('fecha_fin', 'N/A')]
+        ]
+        
+        poliza_table = Table(poliza_data, colWidths=[2.5*inch, 3.5*inch])
+        poliza_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (1, 0), (1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(poliza_table)
+        story.append(Spacer(1, 20))
+    
+    # Información del cliente
+    if cliente_info:
+        story.append(Paragraph("INFORMACIÓN DEL CLIENTE", subtitle_style))
+        
+        if cliente_info.get('tipo_cliente') == 'Persona Jurídica':
+            cliente_data = [
+                ['Razón Social:', cliente_info.get('razon_social', 'N/A')],
+                ['Tipo de Cliente:', cliente_info.get('tipo_cliente', 'N/A')],
+                ['Documento:', f"{cliente_info.get('tipo_documento', '')} - {cliente_info.get('numero_documento', '')}"],
+                ['Correo Electrónico:', cliente_info.get('correo_electronico', 'N/A')],
+                ['Teléfono:', cliente_info.get('telefono_movil', 'N/A')]
+            ]
+        else:
+            cliente_data = [
+                ['Nombres:', f"{cliente_info.get('nombres', '')} {cliente_info.get('apellidos', '')}"],
+                ['Tipo de Cliente:', cliente_info.get('tipo_cliente', 'N/A')],
+                ['Documento:', f"{cliente_info.get('tipo_documento', '')} - {cliente_info.get('numero_documento', '')}"],
+                ['Correo Electrónico:', cliente_info.get('correo_electronico', 'N/A')],
+                ['Teléfono:', cliente_info.get('telefono_movil', 'N/A')]
+            ]
+        
+        cliente_table = Table(cliente_data, colWidths=[2.5*inch, 3.5*inch])
+        cliente_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.lightgreen),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (1, 0), (1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(cliente_table)
+        story.append(Spacer(1, 20))
+    
+    # Campos específicos del movimiento
+    if campos_especificos:
+        story.append(Paragraph("DETALLES ESPECÍFICOS DEL MOVIMIENTO", subtitle_style))
+        
+        detalles_data = []
+        for campo, valor in campos_especificos.items():
+            if valor:
+                campo_nombre = {
+                    'suma_asegurada_nueva': 'Nueva Suma Asegurada',
+                    'prima_nueva': 'Nueva Prima',
+                    'direccion_nueva': 'Nueva Dirección'
+                }.get(campo, campo)
+                
+                if campo == 'direccion_nueva':
+                    # Para direcciones largas, usar párrafo
+                    detalles_data.append([campo_nombre + ':', str(valor)])
+                else:
+                    valor_formateado = f"${valor:,.2f}" if isinstance(valor, (int, float)) else str(valor)
+                    detalles_data.append([campo_nombre + ':', valor_formateado])
+        
+        if detalles_data:
+            detalles_table = Table(detalles_data, colWidths=[2.5*inch, 3.5*inch])
+            detalles_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.lightyellow),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                ('BACKGROUND', (1, 0), (1, -1), colors.white),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP')
+            ]))
+            
+            story.append(detalles_table)
+            story.append(Spacer(1, 20))
+    
+    # Observaciones
+    if observaciones:
+        story.append(Paragraph("OBSERVACIONES", subtitle_style))
+        story.append(Paragraph(observaciones, normal_style))
+        story.append(Spacer(1, 20))
+    
+    # Pie de página
+    story.append(Spacer(1, 30))
+    story.append(Paragraph("___________________________", normal_style))
+    story.append(Paragraph("Firma del Ejecutivo", normal_style))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(f"Documento generado automáticamente el {dt.now().strftime('%d/%m/%Y a las %H:%M:%S')}", 
+                          ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey)))
+    
+    # Construir el PDF
+    doc.build(story)
+    
+    # Obtener el contenido del buffer
+    pdf_data = buffer.getvalue()
+    buffer.close()
+    
+    return pdf_data
+
+def obtener_info_completa_para_pdf(poliza_id, cliente_id):
+    """Obtiene la información completa de póliza y cliente para el PDF"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    poliza_info = None
+    cliente_info = None
+    
+    try:
+        # Obtener información de la póliza usando la función que ya maneja los valores correctos
+        if poliza_id:
+            cursor.execute("SELECT * FROM polizas WHERE id = ?", (poliza_id,))
+            poliza_row = cursor.fetchone()
+            if poliza_row:
+                cursor.execute("PRAGMA table_info(polizas)")
+                poliza_columns = [col[1] for col in cursor.fetchall()]
+                poliza_info = dict(zip(poliza_columns, poliza_row))
+                
+                # Obtener los datos actuales correctos para suma asegurada y prima
+                datos_actuales = obtener_datos_actuales_poliza(poliza_id)
+                if datos_actuales:
+                    # Sobrescribir con los valores correctos
+                    poliza_info['prima'] = datos_actuales['prima_final']
+                    poliza_info['suma_asegurada'] = datos_actuales['suma_asegurada_final']
+        
+        # Obtener información del cliente
+        if cliente_id:
+            cursor.execute("SELECT * FROM clients WHERE id = ?", (cliente_id,))
+            cliente_row = cursor.fetchone()
+            if cliente_row:
+                cursor.execute("PRAGMA table_info(clients)")
+                cliente_columns = [col[1] for col in cursor.fetchall()]
+                cliente_info = dict(zip(cliente_columns, cliente_row))
+    
+    except sqlite3.Error as e:
+        st.error(f"Error al obtener información: {e}")
+    finally:
+        conn.close()
+    
+    return poliza_info, cliente_info
 
 def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especificos, poliza_id):
     """Aplica los cambios del movimiento a la póliza madre según el tipo de movimiento"""
@@ -101,10 +560,12 @@ def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especific
         
         # Manejar cambios de prima
         if tipo_movimiento in ["Anexo de Aumento de Prima", "Anexo de Disminución de Prima", "Renovación"]:
-            if "prima_nueva" in campos_especificos and campos_especificos["prima_nueva"]:
-                updates.append("prima = ?")
-                params.append(str(campos_especificos["prima_nueva"]))
-                cambios_aplicados.append(f"Prima actualizada: {campos_especificos['prima_nueva']}")
+            if "prima_nueva" in campos_especificos and campos_especificos["prima_nueva"] is not None and campos_especificos["prima_nueva"] > 0:
+                prima_valor = float(campos_especificos["prima_nueva"])
+                updates.append("prima_neta = ?")
+                params.append(prima_valor)
+                cambios_aplicados.append(f"Prima neta actualizada: {prima_valor}")
+
         
         # Manejar cambios de estado
         if tipo_movimiento in ["Cancelación", "Anulación"]:
@@ -117,10 +578,14 @@ def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especific
             params.append("Activa")
             cambios_aplicados.append("Estado cambiado a: Activa")
         
-        # Registrar suma asegurada en observaciones (ya que no hay campo específico en polizas)
+        # Actualizar suma asegurada en la póliza y registrar en observaciones
         if tipo_movimiento in ["Anexo de Aumento de Suma Asegurada", "Anexo de Disminución de Suma Asegurada", "Renovación"]:
-            if "suma_asegurada_nueva" in campos_especificos and campos_especificos["suma_asegurada_nueva"]:
-                cambios_aplicados.append(f"Suma Asegurada: {campos_especificos['suma_asegurada_nueva']}")
+            if "suma_asegurada_nueva" in campos_especificos and campos_especificos["suma_asegurada_nueva"] is not None and campos_especificos["suma_asegurada_nueva"] > 0:
+                suma_valor = float(campos_especificos["suma_asegurada_nueva"])
+                updates.append("suma_asegurada = ?")
+                params.append(suma_valor)
+                cambios_aplicados.append(f"Suma asegurada actualizada: {suma_valor}")
+
         
         # Agregar información de cambios a las observaciones
         cursor.execute("SELECT observaciones FROM polizas WHERE id = ?", (poliza_id,))
@@ -130,8 +595,7 @@ def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especific
         if observaciones_actuales:
             nuevas_observaciones += "\n\n"
         
-        import datetime
-        fecha_aplicacion = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        fecha_aplicacion = dt.now().strftime("%Y-%m-%d %H:%M:%S")
         nuevas_observaciones += f"[{fecha_aplicacion}] Movimiento aplicado - {tipo_movimiento}:\n"
         nuevas_observaciones += "\n".join([f"- {cambio}" for cambio in cambios_aplicados])
         
@@ -144,6 +608,8 @@ def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especific
             query = f"UPDATE polizas SET {', '.join(updates)} WHERE id = ?"
             cursor.execute(query, params)
             conn.commit()
+        else:
+            pass  # No hay updates para aplicar
         
         # Actualizar el estado del movimiento a "Aplicado"
         cursor.execute("""
@@ -255,12 +721,46 @@ def crud_movimientos():
             estado = st.selectbox("Estado", ["Proceso", "Aprobado", "Aplicado"])
         
         # Renderizar campos específicos según el tipo de movimiento
-        campos_especificos = render_campos_especificos(tipo_movimiento)
+        campos_especificos = render_campos_especificos(tipo_movimiento, None, poliza_id[0] if poliza_id else None)
         
         # Campos adicionales
         with st.expander("📎 Información Adicional", expanded=False):
-            pdf_path = st.text_input("Ruta/archivo PDF adjunto")
             observaciones = st.text_area("Observaciones del ejecutivo", height=100)
+            
+            # Generación de PDF
+            st.markdown("#### 📄 Documento PDF del Movimiento")
+            
+            if st.button("🎯 Vista Previa del PDF", help="Genera una vista previa del documento antes de crear el movimiento"):
+                if codigo_movimiento and poliza_id and cliente_id and tipo_movimiento:
+                    # Obtener información completa
+                    poliza_info, cliente_info = obtener_info_completa_para_pdf(poliza_id[0], cliente_id[0])
+                    
+                    # Generar PDF
+                    pdf_data = generar_pdf_movimiento(
+                        codigo_movimiento=codigo_movimiento,
+                        fecha_movimiento=fecha_movimiento,
+                        tipo_movimiento=tipo_movimiento,
+                        poliza_info=poliza_info,
+                        cliente_info=cliente_info,
+                        campos_especificos=campos_especificos,
+                        observaciones=observaciones,
+                        estado=estado
+                    )
+                    
+                    # Mostrar botón de descarga
+                    st.download_button(
+                        label="📥 Descargar PDF de Vista Previa",
+                        data=pdf_data,
+                        file_name=f"Movimiento_{codigo_movimiento}_Vista_Previa.pdf",
+                        mime="application/pdf",
+                        help="Descarga el documento PDF del movimiento"
+                    )
+                    
+                    st.success("✅ Vista previa del PDF generada exitosamente. Use el botón de arriba para descargar.")
+                else:
+                    st.warning("⚠️ Complete los campos básicos (código, póliza, cliente, tipo) para generar la vista previa.")
+            
+            st.info("💡 **Consejo:** Puede generar una vista previa del PDF antes de crear el movimiento para verificar que toda la información esté correcta.")
         
         # Opción para aplicar automáticamente
         with st.expander("⚙️ Opciones de Aplicación", expanded=True):
@@ -294,6 +794,9 @@ def crud_movimientos():
             else:
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
+                # Generar nombre del archivo PDF
+                pdf_filename = f"Movimiento_{codigo_movimiento}_{dt.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                
                 cursor.execute("""
                     INSERT INTO movimientos_poliza 
                     (codigo_movimiento, fecha_movimiento, tipo_movimiento, poliza_id, cliente_id, 
@@ -305,7 +808,7 @@ def crud_movimientos():
                     tipo_movimiento,
                     poliza_id[0] if poliza_id else None,
                     cliente_id[0] if cliente_id else None,
-                    pdf_path,
+                    pdf_filename,  # Guardamos el nombre del archivo PDF generado
                     observaciones,
                     estado,
                     campos_especificos.get("suma_asegurada_nueva"),
@@ -318,8 +821,21 @@ def crud_movimientos():
                 conn.commit()
                 conn.close()
                 
-                # Aplicar automáticamente si está marcado y el estado lo permite
-                if aplicar_automaticamente and estado in ["Aprobado", "Aplicado"]:
+                # Generar PDF del movimiento creado
+                poliza_info, cliente_info = obtener_info_completa_para_pdf(poliza_id[0], cliente_id[0])
+                pdf_data = generar_pdf_movimiento(
+                    codigo_movimiento=codigo_movimiento,
+                    fecha_movimiento=fecha_movimiento,
+                    tipo_movimiento=tipo_movimiento,
+                    poliza_info=poliza_info,
+                    cliente_info=cliente_info,
+                    campos_especificos=campos_especificos,
+                    observaciones=observaciones,
+                    estado=estado
+                )
+                
+                # Aplicar automáticamente si el estado es "Aplicado" o si está marcado y el estado lo permite
+                if estado == "Aplicado" or (aplicar_automaticamente and estado in ["Aprobado", "Aplicado"]):
                     exito, mensaje = aplicar_movimiento_a_poliza(
                         movimiento_id, 
                         tipo_movimiento, 
@@ -328,7 +844,7 @@ def crud_movimientos():
                     )
                     
                     if exito:
-                        st.success(f"✅ Movimiento creado y aplicado exitosamente.")
+                        st.success(f"✅ Movimiento creado y aplicado exitosamente a la póliza.")
                         st.info(f"📋 {mensaje}")
                     else:
                         st.success("✅ Movimiento creado exitosamente.")
@@ -337,7 +853,24 @@ def crud_movimientos():
                     st.success("✅ Movimiento creado exitosamente.")
                     if aplicar_automaticamente:
                         st.info("ℹ️ El movimiento se aplicará automáticamente cuando su estado cambie a 'Aprobado' o 'Aplicado'.")
+                    elif estado == "Proceso":
+                        st.info("ℹ️ El movimiento está en proceso. Cambie el estado a 'Aplicado' para aplicar los cambios a la póliza.")
                 
+                # Mostrar botón de descarga del PDF
+                st.markdown("---")
+                st.markdown("### 📄 Documento del Movimiento")
+                st.download_button(
+                    label="📥 Descargar PDF del Movimiento",
+                    data=pdf_data,
+                    file_name=pdf_filename,
+                    mime="application/pdf",
+                    help="Descarga el documento oficial del movimiento en formato PDF"
+                )
+                st.info("📋 El documento PDF contiene toda la información del movimiento para sus archivos.")
+                
+                # Esperar 3 segundos antes del rerun para dar tiempo a la descarga
+                import time
+                time.sleep(3)
                 st.rerun()
 
     elif operation == "Leer":
@@ -416,6 +949,81 @@ def crud_movimientos():
             df_mostrar = df[columnas_disponibles]
             
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+            
+            # Opción para descargar PDF de movimientos existentes
+            with st.expander("📄 Generar PDF de Movimiento Existente", expanded=False):
+                st.markdown("Seleccione un movimiento para generar y descargar su documento PDF:")
+                
+                # Crear opciones para el selectbox
+                opciones_movimientos = []
+                for i, mov in enumerate(movimientos):
+                    opciones_movimientos.append((
+                        mov[0],  # ID del movimiento
+                        f"{mov[1]} - {mov[5]} | {mov[14]} | {mov[15]} ({mov[6]})"  # Código - Tipo | Póliza | Cliente (Estado)
+                    ))
+                
+                if opciones_movimientos:
+                    movimiento_seleccionado = st.selectbox(
+                        "Movimiento:",
+                        opciones_movimientos,
+                        format_func=lambda x: x[1],
+                        key="pdf_download_select"
+                    )
+                    
+                    if st.button("🎯 Generar y Descargar PDF", key="generate_existing_pdf"):
+                        # Buscar el movimiento seleccionado en la lista
+                        mov_data = None
+                        for mov in movimientos:
+                            if mov[0] == movimiento_seleccionado[0]:
+                                mov_data = mov
+                                break
+                        
+                        if mov_data:
+                            # Obtener información completa
+                            poliza_info, cliente_info = obtener_info_completa_para_pdf(mov_data[2], mov_data[3])
+                            
+                            # Preparar campos específicos
+                            campos_especificos = {}
+                            if mov_data[7]:  # suma_asegurada_nueva
+                                campos_especificos["suma_asegurada_nueva"] = mov_data[7]
+                            if mov_data[8]:  # prima_nueva
+                                campos_especificos["prima_nueva"] = mov_data[8]
+                            if mov_data[9]:  # direccion_nueva
+                                campos_especificos["direccion_nueva"] = mov_data[9]
+                            
+                            # Generar PDF
+                            try:
+                                # Convertir fecha string a objeto date
+                                fecha_mov = dt.strptime(mov_data[4], "%Y-%m-%d").date()
+                            except:
+                                fecha_mov = mov_data[4]
+                            
+                            pdf_data = generar_pdf_movimiento(
+                                codigo_movimiento=mov_data[1],
+                                fecha_movimiento=fecha_mov,
+                                tipo_movimiento=mov_data[5],
+                                poliza_info=poliza_info,
+                                cliente_info=cliente_info,
+                                campos_especificos=campos_especificos,
+                                observaciones=mov_data[11] or "",
+                                estado=mov_data[6]
+                            )
+                            
+                            # Mostrar botón de descarga
+                            st.download_button(
+                                label="📥 Descargar PDF del Movimiento",
+                                data=pdf_data,
+                                file_name=f"Movimiento_{mov_data[1]}_Regenerado.pdf",
+                                mime="application/pdf",
+                                help="Descarga el documento PDF del movimiento seleccionado",
+                                key="download_regenerated_pdf"
+                            )
+                            
+                            st.success("✅ PDF generado exitosamente. Use el botón de arriba para descargar.")
+                        else:
+                            st.error("❌ No se pudo encontrar el movimiento seleccionado.")
+                else:
+                    st.info("ℹ️ No hay movimientos disponibles para generar PDF.")
             
             # Resumen por tipo de movimiento
             with st.expander("📈 Resumen por Tipo de Movimiento", expanded=False):
@@ -619,10 +1227,9 @@ def crud_movimientos():
             col1, col2 = st.columns(2)
             with col1:
                 codigo_movimiento = st.text_input("Código único de movimiento", value=movimiento_dict.get("codigo_movimiento", ""))
-                import datetime
                 fecha_val = movimiento_dict.get("fecha_movimiento")
                 try:
-                    fecha_val = datetime.datetime.strptime(fecha_val, "%Y-%m-%d").date() if fecha_val else None
+                    fecha_val = dt.strptime(fecha_val, "%Y-%m-%d").date() if fecha_val else None
                 except Exception:
                     fecha_val = None
                 fecha_movimiento = st.date_input("Fecha de movimiento", value=fecha_val)
@@ -657,7 +1264,7 @@ def crud_movimientos():
                 estado = st.selectbox("Estado", estados, index=estado_index)
             
             # Renderizar campos específicos según el tipo de movimiento
-            campos_especificos = render_campos_especificos(tipo_movimiento, movimiento_dict)
+            campos_especificos = render_campos_especificos(tipo_movimiento, movimiento_dict, poliza_id[0] if poliza_id else None)
             
             # Campos adicionales
             with st.expander("📎 Información Adicional", expanded=False):
@@ -673,6 +1280,21 @@ def crud_movimientos():
                 elif not cliente_id:
                     st.error("Debe seleccionar un cliente.")
                 else:
+                    # Verificar si el estado cambió a "Aprobado" o "Aplicado"
+                    estado_anterior = movimiento_dict.get("estado", "")
+                    aplicar_cambios = False
+                    
+                    # Debug temporal
+                    st.write(f"🔍 Estado anterior: '{estado_anterior}', Estado nuevo: '{estado}'")
+                    
+                    if estado in ["Aprobado", "Aplicado"] and estado_anterior not in ["Aprobado", "Aplicado"]:
+                        aplicar_cambios = True
+                        st.info(f"🔄 Estado cambió de '{estado_anterior}' a '{estado}'. Se aplicarán los cambios a la póliza madre.")
+                    elif estado in ["Aprobado", "Aplicado"]:
+                        # También aplicar si ya está en estado aplicable pero se está actualizando
+                        aplicar_cambios = True
+                        st.info(f"🔄 Estado '{estado}' detectado. Se aplicarán los cambios a la póliza madre.")
+                    
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
                     cursor.execute("""
@@ -705,7 +1327,31 @@ def crud_movimientos():
                     ))
                     conn.commit()
                     conn.close()
-                    st.success("💾 Movimiento actualizado exitosamente.")
+                    
+                    # Aplicar cambios a la póliza si el estado cambió a Aprobado/Aplicado
+                    if aplicar_cambios:
+                        st.write(f"🚀 Ejecutando aplicar_movimiento_a_poliza...")
+                        st.write(f"🔍 Movimiento ID: {selected_movimiento[0]}")
+                        st.write(f"🔍 Tipo: {tipo_movimiento}")
+                        st.write(f"🔍 Campos específicos: {campos_especificos}")
+                        st.write(f"🔍 Póliza ID: {poliza_id[0] if poliza_id else None}")
+                        
+                        exito, mensaje = aplicar_movimiento_a_poliza(
+                            selected_movimiento[0],
+                            tipo_movimiento,
+                            campos_especificos,
+                            poliza_id[0] if poliza_id else None
+                        )
+                        
+                        if exito:
+                            st.success("💾 Movimiento actualizado exitosamente.")
+                            st.success(f"✅ Cambios aplicados automáticamente a la póliza: {mensaje}")
+                        else:
+                            st.success("💾 Movimiento actualizado exitosamente.")
+                            st.warning(f"⚠️ No se pudieron aplicar los cambios automáticamente: {mensaje}")
+                    else:
+                        st.success("💾 Movimiento actualizado exitosamente.")
+                    
                     st.rerun()
 
     elif operation == "Borrar":

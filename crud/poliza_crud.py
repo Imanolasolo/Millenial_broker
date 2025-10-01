@@ -933,20 +933,12 @@ def crud_polizas():
                 # Mostrar prima neta
                 prima_neta = poliza_dict.get("prima_neta", "")
                 result["prima_neta"] = prima_neta if prima_neta else "(Sin prima neta)"
-                # Mostrar anexos desde la columna anexos_poliza
-                anexos_poliza = poliza_dict.get("anexos_poliza", "")
+                # Mostrar anexos desde la columna anexos (corregido)
+                anexos_string = poliza_dict.get("anexos", "")
                 anexos_list = []
-                if anexos_poliza:
-                    try:
-                        import ast
-                        if isinstance(anexos_poliza, str):
-                            anexos_list = ast.literal_eval(anexos_poliza)
-                            if isinstance(anexos_list, list):
-                                anexos_list = [a for a in anexos_list if a and str(a).strip()]
-                        elif isinstance(anexos_poliza, list):
-                            anexos_list = [a for a in anexos_poliza if a and str(a).strip()]
-                    except Exception:
-                        anexos_list = []
+                if anexos_string and anexos_string.strip():
+                    # El campo anexos almacena como string separado por comas: "001, 027, 026"
+                    anexos_list = [a.strip() for a in anexos_string.split(",") if a.strip()]
                 if anexos_list:
                     result["anexos"] = anexos_list
                 else:

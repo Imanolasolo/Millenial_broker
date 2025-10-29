@@ -4,6 +4,16 @@ from dbconfig import DB_FILE, initialize_database
 
 initialize_database()
 
+# Lista canonica de estados de póliza usada en crear y modificar
+ESTADOS_POLIZA = [
+    "Borrador",
+    "Emitida",
+    "Anulada",
+    "Activa",
+    "Pagada",
+    "Pendiente de Pago",
+]
+
 def get_next_numero_poliza():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -297,7 +307,7 @@ def crud_polizas():
 
             col1, col2 = st.columns(2)
             with col1:
-                estado_poliza = st.selectbox("Estado póliza", ["Borrador", "Emitida", "Anulada", "Activa", "Pagada", "Pendiente de Pago"])
+                estado_poliza = st.selectbox("Estado póliza", ESTADOS_POLIZA)
             with col2:
                 agrupadora_options = get_agrupadora_options()
                 selected_agrupadora = st.selectbox(
@@ -850,6 +860,23 @@ def crud_polizas():
                             insert_data = {**poliza_data, **facturacion_data}
                             cursor.execute("PRAGMA table_info(polizas)")
                             poliza_cols = [row[1] for row in cursor.fetchall() if row[1] != "id"]
+                            # Asegurar que exista la columna canonical 'estado' y mapear valores desde el formulario
+                            if "estado" not in poliza_cols:
+                                try:
+                                    cursor.execute("ALTER TABLE polizas ADD COLUMN estado TEXT")
+                                    poliza_cols.append("estado")
+                                except Exception:
+                                    # Si falla, continuar sin detener la inserción
+                                    pass
+                            # El formulario guarda el estado en la clave 'estado_poliza'
+                            if "estado_poliza" in insert_data and "estado" in poliza_cols:
+                                insert_data["estado"] = insert_data.get("estado_poliza", "")
+                                # conservar la clave original si la tabla también la tiene; evitar duplicados al mapear
+                                insert_data.pop("estado_poliza", None)
+                            # Si por alguna razón la tabla tiene 'estado_poliza' (vieja convención), también mantenerla
+                            elif "estado_poliza" in poliza_cols and "estado" in insert_data:
+                                insert_data["estado_poliza"] = insert_data.get("estado", "")
+                                insert_data.pop("estado", None)
                             # --- Asegura que formas_de_pago esté en poliza_cols ---
                             if "formas_de_pago" not in poliza_cols:
                                 cursor.execute("ALTER TABLE polizas ADD COLUMN formas_de_pago TEXT")
@@ -880,6 +907,15 @@ def crud_polizas():
         # Obtener todos los campos de la tabla polizas
         cursor.execute("PRAGMA table_info(polizas)")
         all_fields = [row[1] for row in cursor.fetchall()]
+        # Asegurar que exista la columna canonical 'estado' para estandarizar el guardado/lectura
+        if "estado" not in all_fields:
+            try:
+                cursor.execute("ALTER TABLE polizas ADD COLUMN estado TEXT")
+                conn.commit()
+                all_fields.append("estado")
+            except Exception:
+                # Si no se puede crear la columna, seguimos; las comprobaciones posteriores manejarán la ausencia
+                pass
         cursor.execute(f"SELECT {', '.join(all_fields)} FROM polizas")
         polizas = cursor.fetchall()
         # Obtener nombres legibles para aseguradora, sucursal y agrupadora
@@ -942,19 +978,21 @@ def crud_polizas():
                 # Mostrar suma asegurada
                 suma_asegurada = poliza_dict.get("suma_asegurada", "")
                 result["suma_asegurada"] = suma_asegurada if suma_asegurada else "(Sin suma asegurada)"
+                # Mostrar beneficiario
+                beneficiario = poliza_dict.get("beneficiario", "")
+                result["beneficiario"] = beneficiario if beneficiario else "(Sin beneficiario)"
                 # Mostrar prima neta
                 prima_neta = poliza_dict.get("prima_neta", "")
                 result["prima_neta"] = prima_neta if prima_neta else "(Sin prima neta)"
-                # Campo eliminado: anexos
-                # anexos_string = poliza_dict.get("anexos", "")
-                # anexos_list = []
-                # if anexos_string and anexos_string.strip():
-                #     # El campo anexos almacena como string separado por comas: "001, 027, 026"
-                #     anexos_list = [a.strip() for a in anexos_string.split(",") if a.strip()]
-                # if anexos_list:
-                #     result["anexos"] = anexos_list
-                # else:
-                #     result["anexos"] = "(Sin anexos)"
+                
+                # --- NUEVO: Determinar y exponer el estado de la póliza ---
+                estado_val = poliza_dict.get("estado") or poliza_dict.get("estado_poliza") or poliza_dict.get("estado_poliza", "")
+                estado_display = estado_val if estado_val else "(Sin estado)"
+                result["estado"] = estado_display
+                # Mostrar de forma destacada en la UI en qué estado está la póliza
+                st.info(f"Poliza: {result.get('numero_poliza', '(Sin número)')} → Estado: {estado_display}")
+                # --- FIN NUEVO ---
+
                 # Mostrar tipo de renovación
                 tipo_renovacion = poliza_dict.get("tipo_renovacion", "")
                 result["tipo_renovacion"] = tipo_renovacion if tipo_renovacion else "(Sin tipo de renovación)"
@@ -1066,7 +1104,13 @@ def crud_polizas():
                             val = None
                         updated_values[field] = st.date_input(field.replace("_", " ").capitalize(), value=val)
                     elif field == "estado":
-                        updated_values[field] = st.selectbox("Estado", ["Activa", "Vencida", "Cancelada"], index=["Activa", "Vencida", "Cancelada"].index(poliza_dict.get(field, "Activa")) if poliza_dict.get(field) in ["Activa", "Vencida", "Cancelada"] else 0)
+                        # Usar la lista canonica ESTADOS_POLIZA. Si el valor actual viene en 'estado' o 'estado_poliza', usarlo como valor por defecto.
+                        current_estado = poliza_dict.get(field) or poliza_dict.get("estado_poliza") or ""
+                        try:
+                            default_idx = ESTADOS_POLIZA.index(current_estado) if current_estado in ESTADOS_POLIZA else 0
+                        except Exception:
+                            default_idx = 0
+                        updated_values[field] = st.selectbox("Estado", ESTADOS_POLIZA, index=default_idx)
                     else:
                         updated_values[field] = st.text_input(field.replace("_", " ").capitalize(), value=str(poliza_dict.get(field, "")))
                 submit = st.form_submit_button("Actualizar Póliza")
@@ -1074,6 +1118,22 @@ def crud_polizas():
                     conn = sqlite3.connect(DB_FILE)
                     cursor = conn.cursor()
                     try:
+                        # Mantener consistencia entre columnas 'estado' y 'estado_poliza' si existen ambas
+                        if "estado" in all_fields and "estado_poliza" in all_fields:
+                            # si se seleccionó 'estado' (selectbox), propagar a 'estado_poliza'
+                            if "estado" in updated_values:
+                                updated_values["estado_poliza"] = updated_values.get("estado", "")
+                            elif "estado_poliza" in updated_values:
+                                updated_values["estado"] = updated_values.get("estado_poliza", "")
+                        # Si la tabla tiene solo 'estado_poliza' pero no 'estado', crear 'estado' para normalizar
+                        if "estado_poliza" in all_fields and "estado" not in all_fields:
+                            try:
+                                cursor.execute("ALTER TABLE polizas ADD COLUMN estado TEXT")
+                                conn.commit()
+                                all_fields.append("estado")
+                                updated_values["estado"] = updated_values.get("estado_poliza", "")
+                            except Exception:
+                                pass
                         for f in ["fecha_inicio", "fecha_fin", "fecha_emision"]:
                             if f in updated_values and hasattr(updated_values[f], "strftime"):
                                 updated_values[f] = updated_values[f].strftime("%Y-%m-%d")
@@ -1250,4 +1310,3 @@ def crud_polizas():
                 st.error("No se pudieron obtener los detalles de la póliza seleccionada.")
         
         conn.close()
-

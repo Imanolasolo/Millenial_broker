@@ -23,7 +23,8 @@ def tipos_movimiento_permitidos():
         "Cancelación",
         "Anulación",
         "Rehabilitación",
-        "Renovación"
+        "Renovación",
+        "Aplicar"  # Nuevo movimiento
     ]
 
 def get_campos_por_tipo_movimiento(tipo_movimiento):
@@ -35,12 +36,13 @@ def get_campos_por_tipo_movimiento(tipo_movimiento):
         "Anexo de Disminución de Prima": ["prima_nueva"],
         "Inclusión de Direcciones": ["direccion_nueva"],
         "Exclusión de Direcciones": ["direccion_nueva"],
-        "Endoso de Beneficiario": [],  # No requiere campos adicionales específicos
+        "Endoso de Beneficiario": ["beneficiario"],
         "Anexo Aclaratorio": [],
         "Cancelación": [],
         "Anulación": [],
         "Rehabilitación": [],
-        "Renovación": ["suma_asegurada_nueva", "prima_nueva"]  # Puede incluir ambos
+        "Renovación": ["suma_asegurada_nueva", "prima_nueva"],
+        "Aplicar": []  # Nuevo movimiento sin campos específicos
     }
     return campos_mapping.get(tipo_movimiento, [])
 
@@ -207,14 +209,26 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=
         
         # Renderizar campos específicos
         for campo in campos:
-            if campo == "suma_asegurada_nueva":
+            if campo == "beneficiario":
+                beneficiario_actual = None
+                if poliza_id:
+                    conn = sqlite3.connect(DB_FILE)
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("SELECT beneficiario FROM polizas WHERE id = ?", (poliza_id,))
+                        row = cursor.fetchone()
+                        if row:
+                            beneficiario_actual = row[0]
+                    except Exception:
+                        beneficiario_actual = None
+                    finally:
+                        conn.close()
+                valores[campo] = st.text_input("Beneficiario de la póliza", value=beneficiario_actual or "")
+            elif campo == "suma_asegurada_nueva":
                 valor_actual = valores_actuales.get(campo, 0.0) if valores_actuales else 0.0
-                
-                # Texto de ayuda mejorado con referencia
                 help_text = "Ingrese la nueva suma asegurada para este movimiento"
                 if poliza_datos:
                     help_text += f"\n💡 Suma actual: ${poliza_datos['suma_asegurada_final']:,.2f}"
-                
                 valores[campo] = st.number_input(
                     "Nueva Suma Asegurada", 
                     min_value=0.0, 
@@ -223,8 +237,6 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=
                     format="%.2f",
                     help=help_text
                 )
-                
-                # Mostrar comparación si hay valor actual y nuevo
                 if poliza_datos and valores[campo] > 0:
                     diferencia = valores[campo] - poliza_datos['suma_asegurada_final']
                     if diferencia != 0:
@@ -237,20 +249,14 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=
                         with col_comp2:
                             porcentaje = (diferencia / poliza_datos['suma_asegurada_final'] * 100) if poliza_datos['suma_asegurada_final'] > 0 else 0
                             st.info(f"📊 Cambio: {porcentaje:+.1f}%")
-                            
             elif campo == "prima_nueva":
                 valor_actual = valores_actuales.get(campo, 0.0) if valores_actuales else 0.0
-                
-                # Prima de referencia (principal o suma de ramos)
                 prima_referencia = 0
                 if poliza_datos:
                     prima_referencia = poliza_datos['prima_final']
-                
-                # Texto de ayuda mejorado con referencia
                 help_text = "Ingrese la nueva prima para este movimiento"
                 if poliza_datos and prima_referencia > 0:
                     help_text += f"\n💡 Prima actual: ${prima_referencia:,.2f}"
-                
                 valores[campo] = st.number_input(
                     "Nueva Prima", 
                     min_value=0.0, 
@@ -259,8 +265,6 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=
                     format="%.2f",
                     help=help_text
                 )
-                
-                # Mostrar comparación si hay valor actual y nuevo
                 if poliza_datos and prima_referencia > 0 and valores[campo] > 0:
                     diferencia = valores[campo] - prima_referencia
                     if diferencia != 0:
@@ -273,11 +277,8 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=
                         with col_comp2:
                             porcentaje = (diferencia / prima_referencia * 100) if prima_referencia > 0 else 0
                             st.info(f"📊 Cambio: {porcentaje:+.1f}%")
-                            
             elif campo == "direccion_nueva":
                 valor_actual = valores_actuales.get(campo, "") if valores_actuales else ""
-                
-                # Mostrar cobertura actual si está disponible
                 if poliza_datos and poliza_datos['cobertura']:
                     st.markdown("**🏠 Cobertura Actual:**")
                     st.text_area(
@@ -287,14 +288,14 @@ def render_campos_especificos(tipo_movimiento, valores_actuales=None, poliza_id=
                         disabled=True,
                         help="Esta es la cobertura actual de la póliza para su referencia"
                     )
-                
                 valores[campo] = st.text_area(
                     "Nueva Dirección/Cobertura", 
                     value=str(valor_actual) if valor_actual else "",
                     height=100,
                     help="Ingrese la nueva dirección o las direcciones a incluir/excluir"
                 )
-    
+            else:
+                valores[campo] = st.text_input(campo.replace("_", " ").capitalize(), value=valores_actuales.get(campo, "") if valores_actuales else "")
     return valores
 
 def generar_pdf_movimiento(codigo_movimiento, fecha_movimiento, tipo_movimiento, poliza_info, cliente_info, campos_especificos, observaciones, estado):
@@ -537,7 +538,7 @@ def obtener_info_completa_para_pdf(poliza_id, cliente_id):
     
     return poliza_info, cliente_info
 
-def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especificos, poliza_id):
+def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especificos, poliza_id, confirm_anulacion=False):
     """Aplica los cambios del movimiento a la póliza madre según el tipo de movimiento"""
     
     # Siempre aplicar al menos el tipo_movimiento y anexos, incluso sin campos específicos
@@ -565,11 +566,16 @@ def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especific
         params.append(tipo_movimiento)
         cambios_aplicados.append(f"Tipo de movimiento actualizado: {tipo_movimiento}")
         st.write(f"✅ Tipo de movimiento será actualizado a: {tipo_movimiento}")
-        
+
+        # Si es Endoso de Beneficiario, actualizar el beneficiario
+        if tipo_movimiento == "Endoso de Beneficiario" and "beneficiario" in campos_especificos:
+            updates.append("beneficiario = ?")
+            params.append(campos_especificos["beneficiario"])
+            cambios_aplicados.append(f"Beneficiario actualizado: {campos_especificos['beneficiario']}")
+            st.success(f"El beneficiario de la póliza ha sido actualizado a: {campos_especificos['beneficiario']}")
+
         # Manejar cambios de prima
         if tipo_movimiento in ["Anexo de Aumento de Prima", "Anexo de Disminución de Prima", "Renovación"]:
-
-            
             if "prima_nueva" in campos_especificos and campos_especificos["prima_nueva"] is not None and campos_especificos["prima_nueva"] > 0:
                 prima_valor = float(campos_especificos["prima_nueva"])
                 updates.append("prima_neta = ?")
@@ -580,16 +586,61 @@ def aplicar_movimiento_a_poliza(movimiento_id, tipo_movimiento, campos_especific
                 st.write(f"❌ No se cumplieron las condiciones para actualizar prima")
 
         
-        # Manejar cambios de estado
+        # Manejar cambios de estado (Cancelación / Anulación)
         if tipo_movimiento in ["Cancelación", "Anulación"]:
-            updates.append("estado = ?")
-            params.append("Cancelada" if tipo_movimiento == "Cancelación" else "Anulada")
-            cambios_aplicados.append(f"Estado cambiado a: {'Cancelada' if tipo_movimiento == 'Cancelación' else 'Anulada'}")
+            nuevo_estado = "Cancelada" if tipo_movimiento == "Cancelación" else "Anulada"
+
+            # Para 'Anulación' requerimos confirmación explícita (confirm_anulacion=True) antes de cambiar el estado
+            if tipo_movimiento == "Anulación" and not confirm_anulacion:
+                st.info("ℹ️ La anulación requiere confirmación explícita antes de cambiar el estado de la póliza.")
+            else:
+                # Siempre actualizar la columna canonical `estado`
+                updates.append("estado = ?")
+                params.append(nuevo_estado)
+                cambios_aplicados.append(f"Estado cambiado a: {nuevo_estado}")
+
+                # Intentar también mantener/sincronizar la columna legacy `estado_poliza`
+                try:
+                    cursor.execute("PRAGMA table_info(polizas)")
+                    pol_cols = [r[1] for r in cursor.fetchall()]
+                except Exception:
+                    pol_cols = []
+
+                if 'estado_poliza' in pol_cols:
+                    updates.append("estado_poliza = ?")
+                    params.append(nuevo_estado)
+                else:
+                    # Si no existe la columna legacy, intentar crearla y escribirla para compatibilidad
+                    try:
+                        cursor.execute("ALTER TABLE polizas ADD COLUMN estado_poliza TEXT")
+                        # También actualizar la nueva columna con el mismo valor
+                        updates.append("estado_poliza = ?")
+                        params.append(nuevo_estado)
+                    except sqlite3.Error:
+                        # Si falla la alteración (por permisos o locking), simplemente continuar
+                        pass
         
         if tipo_movimiento == "Rehabilitación":
             updates.append("estado = ?")
             params.append("Activa")
             cambios_aplicados.append("Estado cambiado a: Activa")
+
+        # Manejar movimiento tipo 'Aplicar': activar póliza solo si está en 'Borrador'
+        if tipo_movimiento == "Aplicar":
+            try:
+                cursor.execute("SELECT estado FROM polizas WHERE id = ?", (poliza_id,))
+                fila_estado = cursor.fetchone()
+                estado_actual_poliza = fila_estado[0] if fila_estado else None
+            except Exception:
+                estado_actual_poliza = None
+
+            if estado_actual_poliza == "Borrador":
+                updates.append("estado = ?")
+                params.append("Activa")
+                cambios_aplicados.append("Estado cambiado a: Activa (Aplicar)")
+                st.success("✅ La póliza estaba en 'Borrador' y será activada.")
+            else:
+                st.info(f"ℹ️ La póliza está en estado '{estado_actual_poliza}' y no se activará (solo se activa si está en 'Borrador').")
         
         # Actualizar suma asegurada en la póliza y registrar en observaciones
         if tipo_movimiento in ["Anexo de Aumento de Suma Asegurada", "Anexo de Disminución de Suma Asegurada", "Renovación"]:
@@ -701,7 +752,8 @@ def verificar_puede_aplicar_movimiento(movimiento_id):
         if mov_estado == "Aplicado":
             return False, "El movimiento ya fue aplicado"
         
-        if poliza_estado in ["Cancelada", "Anulada", "Vencida"]:
+        # Permitir aplicar movimientos de tipo 'Anulación' incluso si la póliza ya está en estados 'Cancelada'/'Anulada'/'Vencida'
+        if tipo_mov != "Anulación" and poliza_estado in ["Cancelada", "Anulada", "Vencida"]:
             return False, f"La póliza está en estado '{poliza_estado}' y no puede ser modificada"
         
         return True, "El movimiento puede ser aplicado"
@@ -768,7 +820,8 @@ def crud_movimientos():
             poliza_id = st.selectbox("Póliza asociada", poliza_options, format_func=lambda x: x[1] if x else "", key="poliza_movimiento") if poliza_options else None
             client_options = get_client_options()
             cliente_id = st.selectbox("Cliente asociado", client_options, format_func=lambda x: x[1] if x else "", key="cliente_movimiento") if client_options else None
-            estado = st.selectbox("Estado", ["Proceso", "Aprobado", "Aplicado"])
+            # Estado del movimiento oculto en la creación (por defecto 'Proceso')
+            estado = "Proceso"
         
         # Renderizar campos específicos según el tipo de movimiento
         campos_especificos = render_campos_especificos(tipo_movimiento, None, poliza_id[0] if poliza_id else None)
@@ -846,82 +899,118 @@ def crud_movimientos():
                 cursor = conn.cursor()
                 # Generar nombre del archivo PDF
                 pdf_filename = f"Movimiento_{codigo_movimiento}_{dt.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                
-                cursor.execute("""
-                    INSERT INTO movimientos_poliza 
-                    (codigo_movimiento, fecha_movimiento, tipo_movimiento, poliza_id, cliente_id, 
-                     pdf_documento, observaciones, estado, suma_asegurada_nueva, prima_nueva, direccion_nueva)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    codigo_movimiento,
-                    fecha_movimiento.strftime("%Y-%m-%d"),
-                    tipo_movimiento,
-                    poliza_id[0] if poliza_id else None,
-                    cliente_id[0] if cliente_id else None,
-                    pdf_filename,  # Guardamos el nombre del archivo PDF generado
-                    observaciones,
-                    estado,
-                    campos_especificos.get("suma_asegurada_nueva"),
-                    campos_especificos.get("prima_nueva"),
-                    campos_especificos.get("direccion_nueva")
-                ))
-                
-                # Obtener el ID del movimiento recién creado
-                movimiento_id = cursor.lastrowid
-                conn.commit()
-                conn.close()
-                
-                # Generar PDF del movimiento creado
-                poliza_info, cliente_info = obtener_info_completa_para_pdf(poliza_id[0], cliente_id[0])
-                pdf_data = generar_pdf_movimiento(
-                    codigo_movimiento=codigo_movimiento,
-                    fecha_movimiento=fecha_movimiento,
-                    tipo_movimiento=tipo_movimiento,
-                    poliza_info=poliza_info,
-                    cliente_info=cliente_info,
-                    campos_especificos=campos_especificos,
-                    observaciones=observaciones,
-                    estado=estado
-                )
-                
-                # Aplicar automáticamente si el estado es "Aplicado" o si está marcado y el estado lo permite
-                if estado == "Aplicado" or (aplicar_automaticamente and estado in ["Aprobado", "Aplicado"]):
-                    exito, mensaje = aplicar_movimiento_a_poliza(
-                        movimiento_id, 
-                        tipo_movimiento, 
-                        campos_especificos, 
-                        poliza_id[0] if poliza_id else None
-                    )
-                    
-                    if exito:
-                        st.success(f"✅ Movimiento creado y aplicado exitosamente a la póliza.")
-                        st.info(f"📋 {mensaje}")
+
+                # Verificar unicidad del codigo_movimiento antes de intentar insertar
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM movimientos_poliza WHERE codigo_movimiento = ?", (codigo_movimiento,))
+                    if cursor.fetchone()[0] > 0:
+                        conn.close()
+                        st.error(f"Ya existe un movimiento con el código '{codigo_movimiento}'. Use un código único.")
                     else:
-                        st.success("✅ Movimiento creado exitosamente.")
-                        st.warning(f"⚠️ No se pudo aplicar automáticamente: {mensaje}")
-                else:
-                    st.success("✅ Movimiento creado exitosamente.")
-                    if aplicar_automaticamente:
-                        st.info("ℹ️ El movimiento se aplicará automáticamente cuando su estado cambie a 'Aprobado' o 'Aplicado'.")
-                    elif estado == "Proceso":
-                        st.info("ℹ️ El movimiento está en proceso. Cambie el estado a 'Aplicado' para aplicar los cambios a la póliza.")
-                
-                # Mostrar botón de descarga del PDF
-                st.markdown("---")
-                st.markdown("### 📄 Documento del Movimiento")
-                st.download_button(
-                    label="📥 Descargar PDF del Movimiento",
-                    data=pdf_data,
-                    file_name=pdf_filename,
-                    mime="application/pdf",
-                    help="Descarga el documento oficial del movimiento en formato PDF"
-                )
-                st.info("📋 El documento PDF contiene toda la información del movimiento para sus archivos.")
-                
-                # Esperar 3 segundos antes del rerun para dar tiempo a la descarga
-                import time
-                time.sleep(3)
-                st.rerun()
+                        try:
+                            cursor.execute("""
+                                INSERT INTO movimientos_poliza 
+                                (codigo_movimiento, fecha_movimiento, tipo_movimiento, poliza_id, cliente_id, 
+                                 pdf_documento, observaciones, estado, suma_asegurada_nueva, prima_nueva, direccion_nueva)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                codigo_movimiento,
+                                fecha_movimiento.strftime("%Y-%m-%d"),
+                                tipo_movimiento,
+                                poliza_id[0] if poliza_id else None,
+                                cliente_id[0] if cliente_id else None,
+                                pdf_filename,  # Guardamos el nombre del archivo PDF generado
+                                observaciones,
+                                estado,
+                                campos_especificos.get("suma_asegurada_nueva"),
+                                campos_especificos.get("prima_nueva"),
+                                campos_especificos.get("direccion_nueva")
+                            ))
+
+                            # Obtener el ID del movimiento recién creado
+                            movimiento_id = cursor.lastrowid
+                            conn.commit()
+
+                            # Generar PDF del movimiento creado
+                            poliza_info, cliente_info = obtener_info_completa_para_pdf(poliza_id[0], cliente_id[0])
+                            pdf_data = generar_pdf_movimiento(
+                                codigo_movimiento=codigo_movimiento,
+                                fecha_movimiento=fecha_movimiento,
+                                tipo_movimiento=tipo_movimiento,
+                                poliza_info=poliza_info,
+                                cliente_info=cliente_info,
+                                campos_especificos=campos_especificos,
+                                observaciones=observaciones,
+                                estado=estado
+                            )
+
+                            # Aplicar automáticamente si el estado es "Aplicado" o si está marcado y el estado lo permite.
+                            # Además, si el tipo de movimiento es 'Aplicar' se considerará para aplicación inmediata
+                            # (esto permite que seleccionar 'Aplicar' en la creación ejecute el cambio en la póliza).
+                            if (
+                                estado == "Aplicado"
+                                or (aplicar_automaticamente and estado in ["Aprobado", "Aplicado"])
+                                or (tipo_movimiento == "Aplicar" and poliza_id)
+                                or (tipo_movimiento == "Endoso de Beneficiario" and poliza_id)
+                                or (tipo_movimiento in ["Anexo de Aumento de Suma Asegurada", "Anexo de Disminución de Suma Asegurada", "Renovación"] and poliza_id)
+                            ):
+                                # Si es una Anulación y se aplica inmediatamente, pedir confirmación en la función
+                                if tipo_movimiento == "Anulación":
+                                    exito, mensaje = aplicar_movimiento_a_poliza(
+                                        movimiento_id,
+                                        tipo_movimiento,
+                                        campos_especificos,
+                                        poliza_id[0] if poliza_id else None,
+                                        confirm_anulacion=True
+                                    )
+                                else:
+                                    exito, mensaje = aplicar_movimiento_a_poliza(
+                                        movimiento_id,
+                                        tipo_movimiento,
+                                        campos_especificos,
+                                        poliza_id[0] if poliza_id else None
+                                    )
+
+                                if exito:
+                                    st.success(f"✅ Movimiento creado y aplicado exitosamente a la póliza.")
+                                    st.info(f"📋 {mensaje}")
+                                else:
+                                    st.success("✅ Movimiento creado exitosamente.")
+                                    st.warning(f"⚠️ No se pudo aplicar automáticamente: {mensaje}")
+                            else:
+                                st.success("✅ Movimiento creado exitosamente.")
+                                if aplicar_automaticamente:
+                                    st.info("ℹ️ El movimiento se aplicará automáticamente cuando su estado cambie a 'Aprobado' o 'Aplicado'.")
+                                elif estado == "Proceso":
+                                    st.info("ℹ️ El movimiento está en proceso. Cambie el estado a 'Aplicado' para aplicar los cambios a la póliza.")
+
+                            # Mostrar botón de descarga del PDF
+                            st.markdown("---")
+                            st.markdown("### 📄 Documento del Movimiento")
+                            st.download_button(
+                                label="📥 Descargar PDF del Movimiento",
+                                data=pdf_data,
+                                file_name=pdf_filename,
+                                mime="application/pdf",
+                                help="Descarga el documento oficial del movimiento en formato PDF"
+                            )
+                            st.info("📋 El documento PDF contiene toda la información del movimiento para sus archivos.")
+
+                            # Esperar 3 segundos antes del rerun para dar tiempo a la descarga
+                            import time
+                            time.sleep(3)
+                            st.rerun()
+                        except sqlite3.IntegrityError as ie:
+                            conn.rollback()
+                            st.error(f"Error al crear movimiento: código duplicado o restricción de integridad. ({ie})")
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Error al crear movimiento: {e}")
+                        finally:
+                            conn.close()
+                except Exception:
+                    conn.close()
+                    st.error("Error verificando la unicidad del código de movimiento.")
 
     elif operation == "Leer":
         st.markdown("### 📊 Consultar Movimientos")
@@ -1109,7 +1198,11 @@ def crud_movimientos():
             JOIN polizas p ON m.poliza_id = p.id
             JOIN clients c ON m.cliente_id = c.id
             WHERE m.estado IN ('Proceso', 'Aprobado')
-            AND p.estado NOT IN ('Cancelada', 'Anulada', 'Vencida')
+            -- Permitir movimientos de tipo 'Anulación' incluso si la póliza ya está en estados como Cancelada/Anulada/Vencida
+            AND (
+                p.estado NOT IN ('Cancelada', 'Anulada', 'Vencida')
+                OR m.tipo_movimiento = 'Anulación'
+            )
             ORDER BY m.fecha_movimiento DESC
         """)
         movimientos_aplicables = cursor.fetchall()
@@ -1210,19 +1303,52 @@ def crud_movimientos():
                                 campos_para_aplicar["direccion_nueva"] = detalle_movimiento[9]
                             
                             # Aplicar el movimiento
-                            exito, mensaje = aplicar_movimiento_a_poliza(
-                                movimiento_id,
-                                detalle_movimiento[5],  # tipo_movimiento
-                                campos_para_aplicar,
-                                detalle_movimiento[2]   # poliza_id
-                            )
-                            
-                            if exito:
-                                st.success(f"🎉 {mensaje}")
-                                st.balloons()
-                                st.rerun()
+                            tipo_mov = detalle_movimiento[5]
+
+                            # Si es una Anulación, mostrar el estado actual y pedir confirmación explícita
+                            if tipo_mov == "Anulación":
+                                try:
+                                    cursor.execute("SELECT estado FROM polizas WHERE id = ?", (detalle_movimiento[2],))
+                                    fila = cursor.fetchone()
+                                    estado_actual_poliza = fila[0] if fila else "(desconocido)"
+                                except Exception:
+                                    estado_actual_poliza = "(desconocido)"
+
+                                st.warning(f"La póliza seleccionada está actualmente en estado: '{estado_actual_poliza}'. ¿Desea cambiarla a 'Anulada'?")
+
+                                col_yes, col_no = st.columns(2)
+                                with col_yes:
+                                    if st.button("Sí, ANULAR póliza", key=f"confirm_anular_{movimiento_id}"):
+                                        exito, mensaje = aplicar_movimiento_a_poliza(
+                                            movimiento_id,
+                                            tipo_mov,
+                                            campos_para_aplicar,
+                                            detalle_movimiento[2],
+                                            confirm_anulacion=True
+                                        )
+                                        if exito:
+                                            st.success(f"🎉 {mensaje}")
+                                            st.balloons()
+                                            st.rerun()
+                                        else:
+                                            st.error(f"❌ {mensaje}")
+                                with col_no:
+                                    if st.button("No, cancelar anulación", key=f"cancel_anular_{movimiento_id}"):
+                                        st.info("Anulación cancelada por el usuario.")
                             else:
-                                st.error(f"❌ {mensaje}")
+                                exito, mensaje = aplicar_movimiento_a_poliza(
+                                    movimiento_id,
+                                    tipo_mov,
+                                    campos_para_aplicar,
+                                    detalle_movimiento[2]
+                                )
+
+                                if exito:
+                                    st.success(f"🎉 {mensaje}")
+                                    st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {mensaje}")
                     else:
                         st.info("👆 Marque la confirmación para proceder con la aplicación.")
                 
@@ -1289,15 +1415,15 @@ def crud_movimientos():
                 tipo_index = tipos.index(tipo_actual) if tipo_actual in tipos else 0
                 tipo_movimiento = st.selectbox("Tipo de movimiento", tipos, index=tipo_index)
             
-            with col2:
-                poliza_options = get_poliza_options()
-                poliza_index = 0
-                if movimiento_dict.get("poliza_id") and poliza_options:
-                    try:
-                        poliza_index = [p[0] for p in poliza_options].index(movimiento_dict.get("poliza_id"))
-                    except ValueError:
-                        poliza_index = 0
-                poliza_id = st.selectbox("Póliza asociada", poliza_options, index=poliza_index, format_func=lambda x: x[1] if x else "")
+                with col2:
+                    poliza_options = get_poliza_options()
+                    poliza_index = 0
+                    if movimiento_dict.get("poliza_id") and poliza_options:
+                        try:
+                            poliza_index = [p[0] for p in poliza_options].index(movimiento_dict.get("poliza_id"))
+                        except ValueError:
+                            poliza_index = 0
+                    poliza_id = st.selectbox("Póliza asociada", poliza_options, index=poliza_index, format_func=lambda x: x[1] if x else "")
                 
                 client_options = get_client_options()
                 client_index = 0
@@ -1308,10 +1434,8 @@ def crud_movimientos():
                         client_index = 0
                 cliente_id = st.selectbox("Cliente asociado", client_options, index=client_index, format_func=lambda x: x[1] if x else "")
                 
-                estados = ["Proceso", "Aprobado", "Aplicado"]
-                estado_actual = movimiento_dict.get("estado", "Proceso")
-                estado_index = estados.index(estado_actual) if estado_actual in estados else 0
-                estado = st.selectbox("Estado", estados, index=estado_index)
+                # Ocultar edición directa del estado en la modificación; usar flujos 'Aplicar a Póliza' para aplicar movimientos
+                estado = movimiento_dict.get("estado", "Proceso")
             
             # Renderizar campos específicos según el tipo de movimiento
             campos_especificos = render_campos_especificos(tipo_movimiento, movimiento_dict, poliza_id[0] if poliza_id else None)
@@ -1376,6 +1500,23 @@ def crud_movimientos():
                     ))
                     conn.commit()
                     conn.close()
+
+                    # Si el movimiento es un Endoso de Beneficiario o un Anexo/ Renovación de suma/prima, aplicar inmediatamente
+                    if tipo_movimiento in ("Endoso de Beneficiario", "Anexo de Aumento de Suma Asegurada", "Anexo de Disminución de Suma Asegurada", "Renovación"):
+                        st.info(f"🔄 Aplicando {tipo_movimiento} a la póliza...")
+                        try:
+                            exito, mensaje_aplicar = aplicar_movimiento_a_poliza(
+                                selected_movimiento[0],
+                                tipo_movimiento,
+                                campos_especificos,
+                                poliza_id[0] if poliza_id else None
+                            )
+                            if exito:
+                                st.success(f"✅ {tipo_movimiento} aplicado correctamente: {mensaje_aplicar}")
+                            else:
+                                st.warning(f"⚠️ No se pudo aplicar automáticamente: {mensaje_aplicar}")
+                        except Exception as e:
+                            st.error(f"❌ Error al aplicar automáticamente: {e}")
                     
                     # Aplicar cambios a la póliza si el estado cambió a Aprobado/Aplicado
                     if aplicar_cambios:
@@ -1384,12 +1525,23 @@ def crud_movimientos():
 
                         st.write(f"   - selected_movimiento[0]: {selected_movimiento[0]}")
                         st.write(f"   - tipo_movimiento: {tipo_movimiento}")
-                        exito, mensaje = aplicar_movimiento_a_poliza(
-                            selected_movimiento[0],
-                            tipo_movimiento,
-                            campos_especificos,
-                            poliza_id[0] if poliza_id else None
-                        )
+                        # Si el movimiento es una Anulación y el estado cambió a Aplicado/Aprobado,
+                        # asumimos que la actualización vino del usuario y permitimos la anulación inmediata.
+                        if tipo_movimiento == "Anulación":
+                            exito, mensaje = aplicar_movimiento_a_poliza(
+                                selected_movimiento[0],
+                                tipo_movimiento,
+                                campos_especificos,
+                                poliza_id[0] if poliza_id else None,
+                                confirm_anulacion=True
+                            )
+                        else:
+                            exito, mensaje = aplicar_movimiento_a_poliza(
+                                selected_movimiento[0],
+                                tipo_movimiento,
+                                campos_especificos,
+                                poliza_id[0] if poliza_id else None
+                            )
                         
                         if exito:
                             st.success("💾 Movimiento actualizado exitosamente.")

@@ -142,6 +142,7 @@ def initialize_database():
             fecha_inicio TEXT NOT NULL,
             fecha_fin TEXT NOT NULL,
             estado TEXT NOT NULL,
+            beneficiario TEXT,
             FOREIGN KEY (cliente_id) REFERENCES clients (id),
             FOREIGN KEY (usuario_id) REFERENCES users (id)
         )
@@ -154,6 +155,10 @@ def initialize_database():
     if "observaciones" not in polizas_columns:
         cursor.execute("ALTER TABLE polizas ADD COLUMN observaciones TEXT")
         print("Added 'observaciones' column to polizas.")
+    # Añadir columna beneficiario si no existe (para migraciones)
+    if "beneficiario" not in polizas_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN beneficiario TEXT")
+        print("Added 'beneficiario' column to polizas.")
 
     # Crear tabla poliza_ramos si no existe
     cursor.execute('''

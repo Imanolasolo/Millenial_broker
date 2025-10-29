@@ -30,57 +30,7 @@ def get_pdf_text(pdf_list):
             text += page.get_text()
     return text
 
-def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len,
-    )
-    chunks = text_splitter.split_text(text)
-    return chunks
 
-def get_vector_store(text_chunks):
-    if not text_chunks:
-        st.warning("Please upload the textual PDF file - this is PDF files of image")
-        return None
-    embeddings = OpenAIEmbeddings(openai_api_key=st.secrets["OPEN_AI_APIKEY"])
-    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
-    return vectorstore
-
-def get_conversation_chain(vector_store):
-    llm = ChatOpenAI(openai_api_key=st.secrets["OPEN_AI_APIKEY"])
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vector_store.as_retriever(),
-        memory=memory
-    )
-    return conversation_chain
-
-def handle_userInput(user_question):
-    response = st.session_state.conversation({'question': user_question})
-    # Solo mostrar la última respuesta del bot
-    bot_reply = response['chat_history'][-1].content if response['chat_history'] else ""
-    st.write(bot_template.replace("{{MSG}}", bot_reply), unsafe_allow_html=True)
-    # No guardar ni mostrar el historial completo
-
-if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
-if "pdf_text" not in st.session_state:
-        st.session_state.pdf_text = ""
-
-sample_pdf_path = os.path.join(os.getcwd(), "Base_conocimiento_proceso_admin.pdf")
-st.session_state.pdf_files = [sample_pdf_path]
-
-raw_text = get_pdf_text(st.session_state.pdf_files)
-st.session_state.pdf_text = raw_text
-text_chunks = get_text_chunks(raw_text)
-vector_store = get_vector_store(text_chunks)
-st.session_state.conversation = get_conversation_chain(vector_store)
 
 def admin_dashboard():
     # Retrieve username from session state

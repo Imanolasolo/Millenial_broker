@@ -1,5 +1,6 @@
 import streamlit as st
 import sqlite3
+import datetime
 from dbconfig import DB_FILE, initialize_database
 
 initialize_database()
@@ -317,6 +318,22 @@ def crud_polizas():
                     key="agrupadora"
                 ) if agrupadora_options else None
 
+            # Campos adicionales: Dirección y Contenido asegurado (usar keys para persistencia)
+            col3, col4 = st.columns(2)
+            with col3:
+                st.text_input(
+                    "Dirección",
+                    help="Localización donde se maneja la póliza (se almacenará en la columna 'direccion')",
+                    key="poliza_direccion"
+                )
+            with col4:
+                st.text_area(
+                    "Contenido asegurado",
+                    help="Descripción del contenido que se asegurará (se almacenará en la columna 'contenido')",
+                    height=80,
+                    key="poliza_contenido"
+                )
+
             siguiente = st.button("Siguiente")
 
             if siguiente:
@@ -340,6 +357,9 @@ def crud_polizas():
                         "tomador_id": tomador_id,
                         "tomador_nombre": tomador_nombre,
                         "estado_poliza": estado_poliza,
+                        # Guardar los campos nuevos (leer desde session_state para persistencia)
+                        "direccion": st.session_state.get("poliza_direccion", ""),
+                        "contenido": st.session_state.get("poliza_contenido", ""),
                     }
                     st.session_state["poliza_form_step"] = 2
 
@@ -844,6 +864,73 @@ def crud_polizas():
                         "id_beneficiario": id_beneficiario if asegurado_contratante == "No" else "",
                         "formas_de_pago": formas_de_pago,  # <-- Asegúrate de que esto está aquí
                     }
+                    # Persistir la factura provisionalmente en la tabla `facturas` para que quede registrada
+                    try:
+                        connf = sqlite3.connect(DB_FILE)
+                        curf = connf.cursor()
+                        # Preparar montos numéricos seguros
+                        try:
+                            monto_neto_f = float(st.session_state["facturacion_data"].get("prima_neta", 0) or 0)
+                        except Exception:
+                            monto_neto_f = 0.0
+                        try:
+                            impuestos_f = float(st.session_state["facturacion_data"].get("contrib_scvs", 0) or 0) + float(st.session_state["facturacion_data"].get("ssoc_camp", 0) or 0) + float(st.session_state["facturacion_data"].get("derechos_emision", 0) or 0)
+                        except Exception:
+                            impuestos_f = 0.0
+                        try:
+                            iva_f = float(st.session_state["facturacion_data"].get("iva_15", 0) or 0)
+                        except Exception:
+                            iva_f = 0.0
+                        try:
+                            total_f = float(st.session_state["facturacion_data"].get("total", 0) or 0)
+                        except Exception:
+                            total_f = monto_neto_f + impuestos_f + iva_f
+
+                        # Use None for empty invoice number so SQLite stores NULL (UNIQUE allows multiple NULLs)
+                        numero_fact_raw = st.session_state["facturacion_data"].get("numero_factura", "")
+                        numero_fact = numero_fact_raw.strip() if numero_fact_raw and str(numero_fact_raw).strip() else None
+                        fecha_fact = st.session_state["facturacion_data"].get("fecha_factura", None)
+                        # intentar derivar cliente_id del formulario de póliza si está disponible
+                        cliente_id_for_fact = None
+                        try:
+                            cliente_id_for_fact = st.session_state.get("poliza_form_data", {}).get("tomador_id")
+                        except Exception:
+                            cliente_id_for_fact = None
+
+                        # Use a local import of date to avoid accidental shadowing of the `datetime` name
+                        from datetime import date
+                        fecha_reg = date.today().strftime('%Y-%m-%d')
+
+                        curf.execute(
+                            '''
+                            INSERT INTO facturas (numero_factura, poliza_id, movimiento_id, cliente_id, fecha_emision, monto_neto, impuestos, iva, total, estado, fecha_registro)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''',
+                            (
+                                numero_fact,
+                                None,
+                                None,
+                                cliente_id_for_fact,
+                                fecha_fact,
+                                monto_neto_f,
+                                impuestos_f,
+                                iva_f,
+                                total_f,
+                                'Emitida',
+                                fecha_reg
+                            )
+                        )
+                        connf.commit()
+                        factura_id_created = curf.lastrowid
+                        st.session_state["factura_id"] = factura_id_created
+                        st.success(f"Datos de facturación guardados y factura provisional registrada (id={factura_id_created}).")
+                    except Exception as e:
+                        st.warning(f"No se pudo crear factura provisional automáticamente: {e}")
+                    finally:
+                        try:
+                            connf.close()
+                        except Exception:
+                            pass
                     # --- CREAR POLIZA EN LA BASE DE DATOS ---
                     poliza_data = st.session_state.get("poliza_form_data", {})
                     facturacion_data = st.session_state.get("facturacion_data", {})
@@ -892,15 +979,39 @@ def crud_polizas():
                                     f"INSERT INTO polizas ({', '.join(insert_fields)}) VALUES ({', '.join(['?']*len(insert_fields))})",
                                     insert_values
                                 )
+                                new_poliza_id = cursor.lastrowid
                                 conn.commit()
                                 st.success("Póliza creada exitosamente.")
                                 st.session_state["poliza_form_step"] = 1
                                 st.session_state["poliza_form_data"] = {}
                                 st.session_state["facturacion_data"] = {}
+                                # Si previamente se creó una factura provisional, ligarla a la póliza creada
+                                try:
+                                    factura_pending = st.session_state.get("factura_id")
+                                    if factura_pending:
+                                        cur_up = conn.cursor()
+                                        cur_up.execute("UPDATE facturas SET poliza_id = ? WHERE id = ?", (new_poliza_id, factura_pending))
+                                        conn.commit()
+                                        # limpiar estado de factura provisional
+                                        st.session_state.pop("factura_id", None)
+                                except Exception:
+                                    # No bloquear la creación si no se puede ligar la factura
+                                    pass
                             except Exception as e:
                                 st.error(f"Error al crear la póliza: {e}")
                             finally:
                                 conn.close()
+                            # Debug: ensure direccion/contenido were saved (logs for local debugging)
+                            try:
+                                conn2 = sqlite3.connect(DB_FILE)
+                                cur2 = conn2.cursor()
+                                cur2.execute("SELECT id, numero_poliza, direccion, contenido FROM polizas WHERE numero_poliza = ? ORDER BY id DESC LIMIT 1", (insert_data.get('numero_poliza', ''),))
+                                saved = cur2.fetchone()
+                                if saved:
+                                    st.write('Guardado en DB:', saved)
+                                conn2.close()
+                            except Exception:
+                                pass
     elif operation == "Leer":
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -984,6 +1095,14 @@ def crud_polizas():
                 # Mostrar prima neta
                 prima_neta = poliza_dict.get("prima_neta", "")
                 result["prima_neta"] = prima_neta if prima_neta else "(Sin prima neta)"
+
+                # Mostrar dirección (localización donde se maneja la póliza)
+                direccion = poliza_dict.get("direccion", "")
+                result["direccion"] = direccion if direccion else "(Sin dirección)"
+
+                # Mostrar contenido asegurado
+                contenido = poliza_dict.get("contenido", "")
+                result["contenido"] = contenido if contenido else "(Sin contenido)"
                 
                 # --- NUEVO: Determinar y exponer el estado de la póliza ---
                 estado_val = poliza_dict.get("estado") or poliza_dict.get("estado_poliza") or poliza_dict.get("estado_poliza", "")
@@ -993,6 +1112,43 @@ def crud_polizas():
                 st.info(f"Poliza: {result.get('numero_poliza', '(Sin número)')} → Estado: {estado_display}")
                 # --- FIN NUEVO ---
 
+                # --- NUEVO: Obtener y mostrar movimientos asociados a esta póliza ---
+                try:
+                    conn_mov = sqlite3.connect(DB_FILE)
+                    cur_mov = conn_mov.cursor()
+                    # Buscar movimientos por poliza_id usando el numero_poliza actual como referencia
+                    cur_mov.execute("""
+                        SELECT m.id, m.codigo_movimiento, m.tipo_movimiento, m.estado, m.fecha_movimiento
+                        FROM movimientos_poliza m
+                        JOIN polizas p ON m.poliza_id = p.id
+                        WHERE p.numero_poliza = ?
+                        ORDER BY m.fecha_movimiento DESC
+                    """, (poliza_dict.get("numero_poliza"),))
+                    movimientos_asociados = cur_mov.fetchall()
+
+                    if movimientos_asociados:
+                        import pandas as pd
+                        df_mov = pd.DataFrame(movimientos_asociados, columns=['ID', 'Código', 'Tipo', 'Estado', 'Fecha'])
+                        st.markdown("**Movimientos asociados a esta póliza:**")
+                        st.dataframe(df_mov, use_container_width=True, hide_index=True)
+                        # Añadir al JSON que se mostrará
+                        result["movimientos"] = [
+                            {"id": m[0], "codigo_movimiento": m[1], "tipo_movimiento": m[2], "estado": m[3], "fecha_movimiento": m[4]}
+                            for m in movimientos_asociados
+                        ]
+                    else:
+                        result["movimientos"] = []
+                        st.info("ℹ️ Esta póliza no tiene movimientos asociados.")
+                except Exception:
+                    # No bloquear la visualización por errores en listados de movimientos
+                    result["movimientos"] = []
+                finally:
+                    try:
+                        conn_mov.close()
+                    except Exception:
+                        pass
+                # --- FIN NUEVO ---
+                
                 # Mostrar tipo de renovación
                 tipo_renovacion = poliza_dict.get("tipo_renovacion", "")
                 result["tipo_renovacion"] = tipo_renovacion if tipo_renovacion else "(Sin tipo de renovación)"
@@ -1022,6 +1178,58 @@ def crud_polizas():
                 # Mostrar número de factura
                 numero_factura = poliza_dict.get("numero_factura", "")
                 result["numero_factura"] = numero_factura if numero_factura else "(Sin número de factura)"
+                # --- NUEVO: Mostrar facturas asociadas a esta póliza ---
+                try:
+                    conn_f = sqlite3.connect(DB_FILE)
+                    cur_f = conn_f.cursor()
+                    cur_f.execute(
+                        "SELECT id, numero_factura, movimiento_id, cliente_id, fecha_emision, monto_neto, impuestos, iva, total, estado FROM facturas WHERE poliza_id = ?",
+                        (poliza_dict.get('id'),)
+                    )
+                    fact_rows = cur_f.fetchall()
+                    if fact_rows:
+                        import pandas as pd
+                        df_f = pd.DataFrame(fact_rows, columns=['ID', 'Número Factura', 'Movimiento ID', 'Cliente ID', 'Fecha Emisión', 'Monto Neto', 'Impuestos', 'IVA', 'Total', 'Estado'])
+                        st.markdown('**Facturas vinculadas a esta póliza:**')
+                        st.dataframe(df_f, use_container_width=True, hide_index=True)
+                        result['facturas'] = [
+                            {
+                                'id': f[0], 'numero_factura': f[1], 'movimiento_id': f[2], 'cliente_id': f[3],
+                                'fecha_emision': f[4], 'monto_neto': f[5], 'impuestos': f[6], 'iva': f[7], 'total': f[8], 'estado': f[9]
+                            }
+                            for f in fact_rows
+                        ]
+                    else:
+                        result['facturas'] = []
+                    conn_f.close()
+                except Exception:
+                    result['facturas'] = []
+                # --- NUEVO: Mostrar notas de crédito asociadas ---
+                try:
+                    conn_nc = sqlite3.connect(DB_FILE)
+                    cur_nc = conn_nc.cursor()
+                    cur_nc.execute(
+                        "SELECT id, numero_nota, factura_id, movimiento_id, cliente_id, fecha_emision, monto_neto, impuestos, iva, total, motivo, estado FROM notas_de_credito WHERE poliza_id = ?",
+                        (poliza_dict.get('id'),)
+                    )
+                    notas_rows = cur_nc.fetchall()
+                    if notas_rows:
+                        import pandas as pd
+                        df_nc = pd.DataFrame(notas_rows, columns=['ID', 'Número Nota', 'Factura ID', 'Movimiento ID', 'Cliente ID', 'Fecha Emisión', 'Monto Neto', 'Impuestos', 'IVA', 'Total', 'Motivo', 'Estado'])
+                        st.markdown('**Notas de crédito vinculadas a esta póliza:**')
+                        st.dataframe(df_nc, use_container_width=True, hide_index=True)
+                        result['notas_de_credito'] = [
+                            {
+                                'id': n[0], 'numero_nota': n[1], 'factura_id': n[2], 'movimiento_id': n[3], 'cliente_id': n[4],
+                                'fecha_emision': n[5], 'monto_neto': n[6], 'impuestos': n[7], 'iva': n[8], 'total': n[9], 'motivo': n[10], 'estado': n[11]
+                            }
+                            for n in notas_rows
+                        ]
+                    else:
+                        result['notas_de_credito'] = []
+                    conn_nc.close()
+                except Exception:
+                    result['notas_de_credito'] = []
                 # Mostrar formas de pago
                 formas_de_pago = poliza_dict.get("formas_de_pago", "")
                 result["formas_de_pago"] = formas_de_pago if formas_de_pago else "(Sin formas de pago)"
@@ -1034,6 +1242,9 @@ def crud_polizas():
                 # Mostrar total
                 total = poliza_dict.get("total", "")
                 result["total"] = total if total else "(Sin total)"
+                # Mostrar observaciones (campo 'observaciones' en la tabla polizas)
+                observaciones_val = poliza_dict.get("observaciones", "")
+                result["observaciones"] = observaciones_val if observaciones_val else "(Sin observaciones)"
                 st.markdown(f"#### Póliza #{idx+1}")
                 st.code(json.dumps(result, indent=2, ensure_ascii=False), language="json")
                 st.markdown("---")
@@ -1111,6 +1322,10 @@ def crud_polizas():
                         except Exception:
                             default_idx = 0
                         updated_values[field] = st.selectbox("Estado", ESTADOS_POLIZA, index=default_idx)
+                    elif field == "direccion":
+                        updated_values[field] = st.text_input("Dirección", value=str(poliza_dict.get(field, "")))
+                    elif field == "contenido":
+                        updated_values[field] = st.text_area("Contenido asegurado", value=str(poliza_dict.get(field, "")), height=120)
                     else:
                         updated_values[field] = st.text_input(field.replace("_", " ").capitalize(), value=str(poliza_dict.get(field, "")))
                 submit = st.form_submit_button("Actualizar Póliza")

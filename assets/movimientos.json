@@ -1,0 +1,9 @@
+[
+  { "id": 1, "nombre": "Activación de póliza" },
+  { "id": 2, "nombre": "Anexo Aclaratorio" },
+  { "id": 3, "nombre": "Endoso Beneficiario" },
+  { "id": 4, "nombre": "Anexo de Aumento de Prima" },
+  { "id": 5, "nombre": "Anexo de Disminución de Prima" },
+  { "id": 6, "nombre": "Anexo de Aumento de Suma Aseguradora" },
+  { "id": 7, "nombre": "Anexo de Disminucion de Suma Aseguradora" }
+]

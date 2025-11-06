@@ -141,6 +141,8 @@ def initialize_database():
             prima TEXT NOT NULL,
             fecha_inicio TEXT NOT NULL,
             fecha_fin TEXT NOT NULL,
+            direccion TEXT,
+            contenido TEXT,
             estado TEXT NOT NULL,
             beneficiario TEXT,
             FOREIGN KEY (cliente_id) REFERENCES clients (id),
@@ -159,6 +161,14 @@ def initialize_database():
     if "beneficiario" not in polizas_columns:
         cursor.execute("ALTER TABLE polizas ADD COLUMN beneficiario TEXT")
         print("Added 'beneficiario' column to polizas.")
+    # Añadir columna direccion si no existe (localización donde se maneja la póliza)
+    if "direccion" not in polizas_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN direccion TEXT")
+        print("Added 'direccion' column to polizas.")
+    # Añadir columna contenido si no existe (contenido asegurado)
+    if "contenido" not in polizas_columns:
+        cursor.execute("ALTER TABLE polizas ADD COLUMN contenido TEXT")
+        print("Added 'contenido' column to polizas.")
 
     # Crear tabla poliza_ramos si no existe
     cursor.execute('''
@@ -223,6 +233,55 @@ def initialize_database():
         )
     ''')
     print("Movimientos_Poliza table ensured.")
+
+    # Crear tabla facturas si no existe
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS facturas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero_factura TEXT UNIQUE,
+            poliza_id INTEGER,
+            movimiento_id INTEGER,
+            cliente_id INTEGER,
+            fecha_emision TEXT,
+            monto_neto REAL,
+            impuestos REAL,
+            iva REAL,
+            total REAL,
+            estado TEXT DEFAULT 'Emitida',
+            pdf_documento TEXT,
+            fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(poliza_id) REFERENCES polizas(id),
+            FOREIGN KEY(movimiento_id) REFERENCES movimientos_poliza(id),
+            FOREIGN KEY(cliente_id) REFERENCES clients(id)
+        )
+    ''')
+    print("Facturas table ensured.")
+
+    # Crear tabla notas_de_credito si no existe
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notas_de_credito (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero_nota TEXT UNIQUE,
+            factura_id INTEGER,
+            poliza_id INTEGER,
+            movimiento_id INTEGER,
+            cliente_id INTEGER,
+            fecha_emision TEXT,
+            monto_neto REAL,
+            impuestos REAL,
+            iva REAL,
+            total REAL,
+            motivo TEXT,
+            estado TEXT DEFAULT 'Emitida',
+            pdf_documento TEXT,
+            fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(factura_id) REFERENCES facturas(id),
+            FOREIGN KEY(poliza_id) REFERENCES polizas(id),
+            FOREIGN KEY(movimiento_id) REFERENCES movimientos_poliza(id),
+            FOREIGN KEY(cliente_id) REFERENCES clients(id)
+        )
+    ''')
+    print("Notas_de_Credito table ensured.")
 
     conn.commit()
     conn.close()

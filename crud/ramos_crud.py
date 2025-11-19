@@ -1,11 +1,28 @@
-import streamlit as st
-import sqlite3
-import pandas as pd
-from dbconfig import DB_FILE
-import datetime as dt
+# ============================================================================
+# CRUD DE RAMOS DE SEGUROS - ramos_crud.py
+# ============================================================================
+# Operaciones CRUD para gestionar los ramos (tipos) de seguros
+# Los ramos son categorías de seguros como Vida, Auto, Hogar, etc.
+# ============================================================================
 
+# Importaciones necesarias
+import streamlit as st  # Framework de interfaz de usuario
+import sqlite3  # Manejo de base de datos SQLite
+import pandas as pd  # Manejo de DataFrames para visualización
+from dbconfig import DB_FILE  # Ruta del archivo de base de datos
+import datetime as dt  # Manejo de fechas
+
+# ============================================================================
+# FUNCIÓN: get_all_ramos
+# Obtiene todos los ramos de seguros de la base de datos
+# ============================================================================
 def get_all_ramos():
-    """Obtiene todos los ramos de seguros de la base de datos"""
+    """
+    Consulta todos los ramos de seguros y los retorna como DataFrame
+    
+    Retorna:
+        pandas.DataFrame: DataFrame con todos los ramos ordenados por nombre
+    """
     conn = sqlite3.connect(DB_FILE)
     try:
         query = "SELECT * FROM ramos_seguros ORDER BY nombre"
@@ -17,67 +34,132 @@ def get_all_ramos():
     finally:
         conn.close()
 
+# ============================================================================
+# FUNCIÓN: create_ramo
+# Crea un nuevo ramo de seguros en la base de datos
+# ============================================================================
 def create_ramo(nombre, descripcion):
-    """Crea un nuevo ramo de seguros"""
+    """
+    Inserta un nuevo ramo de seguros
+    
+    Parámetros:
+        nombre (str): Nombre del ramo (único)
+        descripcion (str): Descripción del ramo
+    
+    Retorna:
+        tuple: (bool éxito, str mensaje)
+    """
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
     try:
+        # Insertar nuevo ramo
         cursor.execute('''
             INSERT INTO ramos_seguros (nombre, descripcion)
             VALUES (?, ?)
         ''', (nombre, descripcion))
         conn.commit()
         return True, "Ramo creado exitosamente"
+    
     except sqlite3.IntegrityError:
+        # El nombre ya existe (es UNIQUE)
         return False, "Ya existe un ramo con ese nombre"
+    
     except Exception as e:
+        # Otro error
         return False, f"Error al crear ramo: {str(e)}"
+    
     finally:
         conn.close()
 
+# ============================================================================
+# FUNCIÓN: update_ramo
+# Actualiza un ramo de seguros existente
+# ============================================================================
 def update_ramo(ramo_id, nombre, descripcion):
-    """Actualiza un ramo de seguros existente"""
+    """
+    Modifica los datos de un ramo existente
+    
+    Parámetros:
+        ramo_id (int): ID del ramo a actualizar
+        nombre (str): Nuevo nombre
+        descripcion (str): Nueva descripción
+    
+    Retorna:
+        tuple: (bool éxito, str mensaje)
+    """
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
     try:
+        # Actualizar ramo
         cursor.execute('''
             UPDATE ramos_seguros 
             SET nombre = ?, descripcion = ?
             WHERE id = ?
         ''', (nombre, descripcion, ramo_id))
         conn.commit()
+        
+        # Verificar si se actualizó algún registro
         if cursor.rowcount > 0:
             return True, "Ramo actualizado exitosamente"
         else:
             return False, "No se encontró el ramo especificado"
+    
     except sqlite3.IntegrityError:
+        # El nombre ya existe
         return False, "Ya existe un ramo con ese nombre"
+    
     except Exception as e:
         return False, f"Error al actualizar ramo: {str(e)}"
+    
     finally:
         conn.close()
 
+# ============================================================================
+# FUNCIÓN: delete_ramo
+# Elimina un ramo de seguros (con validación de uso)
+# ============================================================================
 def delete_ramo(ramo_id):
-    """Elimina un ramo de seguros"""
+    """
+    Elimina un ramo de seguros si no está siendo usado
+    
+    Parámetros:
+        ramo_id (int): ID del ramo a eliminar
+    
+    Retorna:
+        tuple: (bool éxito, str mensaje)
+    """
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
     try:
-        # Verificar si el ramo está siendo usado en pólizas
+        # ============================================================================
+        # VALIDACIÓN: Verificar si el ramo está siendo usado en pólizas
+        # ============================================================================
         cursor.execute("SELECT COUNT(*) FROM polizas WHERE ramo_id = ?", (ramo_id,))
         count = cursor.fetchone()[0]
         
+        # Si está en uso, no permitir la eliminación (integridad referencial)
         if count > 0:
             return False, f"No se puede eliminar el ramo porque está siendo usado en {count} póliza(s)"
         
+        # Si no está en uso, proceder con la eliminación
         cursor.execute("DELETE FROM ramos_seguros WHERE id = ?", (ramo_id,))
         conn.commit()
         
+        # Verificar si se eliminó algún registro
         if cursor.rowcount > 0:
             return True, "Ramo eliminado exitosamente"
         else:
             return False, "No se encontró el ramo especificado"
+    
     except Exception as e:
         return False, f"Error al eliminar ramo: {str(e)}"
+    
     finally:
         conn.close()
 

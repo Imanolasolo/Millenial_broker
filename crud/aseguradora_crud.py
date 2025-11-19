@@ -1,68 +1,162 @@
-import sqlite3
-import streamlit as st
-import json
-import os
-from datetime import datetime
-from dbconfig import DB_FILE
+# ============================================================================
+# CRUD DE ASEGURADORAS - aseguradora_crud.py
+# ============================================================================
+# Operaciones CRUD para aseguradoras, sucursales y relación con ramos
+# Gestiona compañías de seguros y sus puntos de atención
+# ============================================================================
 
-# --- NUEVO: Tabla sucursales ---
+# Importaciones necesarias
+import sqlite3  # Manejo de base de datos SQLite
+import streamlit as st  # Framework de interfaz de usuario
+import json  # Manejo de datos JSON
+import os  # Operaciones del sistema operativo
+from datetime import datetime  # Manejo de fechas y tiempos
+from dbconfig import DB_FILE  # Ruta del archivo de base de datos
+
+# ============================================================================
+# FUNCIÓN: ensure_sucursales_table
+# Asegura que la tabla de sucursales exista en la base de datos
+# ============================================================================
 def ensure_sucursales_table():
+    """
+    Crea la tabla sucursales si no existe
+    Sucursales son puntos de atención de las aseguradoras
+    """
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
+    # Crear tabla sucursales con relación a aseguradoras
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sucursales (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            aseguradora_id INTEGER NOT NULL,
-            nombre TEXT NOT NULL,
-            ciudad TEXT,
-            direccion TEXT,
-            telefono TEXT,
-            email TEXT,
-            FOREIGN KEY (aseguradora_id) REFERENCES aseguradoras(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT,  -- ID único de la sucursal
+            aseguradora_id INTEGER NOT NULL,  -- ID de la aseguradora (clave foránea)
+            nombre TEXT NOT NULL,  -- Nombre de la sucursal
+            ciudad TEXT,  -- Ciudad donde se ubica
+            direccion TEXT,  -- Dirección completa
+            telefono TEXT,  -- Teléfono de contacto
+            email TEXT,  -- Email de contacto
+            FOREIGN KEY (aseguradora_id) REFERENCES aseguradoras(id)  -- Relación con aseguradora
         )
     ''')
-    conn.commit()
-    conn.close()
+    
+    conn.commit()  # Confirmar cambios
+    conn.close()  # Cerrar conexión
 
+# ============================================================================
+# FUNCIÓN: create_sucursal
+# Crea una nueva sucursal para una aseguradora
+# ============================================================================
 def create_sucursal(aseguradora_id, nombre, ciudad, direccion, telefono, email):
+    """
+    Inserta una nueva sucursal en la base de datos
+    
+    Parámetros:
+        aseguradora_id (int): ID de la aseguradora dueña de la sucursal
+        nombre (str): Nombre de la sucursal
+        ciudad (str): Ciudad
+        direccion (str): Dirección completa
+        telefono (str): Teléfono de contacto
+        email (str): Email de contacto
+    """
+    # Asegurar que la tabla existe
     ensure_sucursales_table()
+    
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
+    # Insertar nueva sucursal
     cursor.execute('''
         INSERT INTO sucursales (aseguradora_id, nombre, ciudad, direccion, telefono, email)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (aseguradora_id, nombre, ciudad, direccion, telefono, email))
-    conn.commit()
-    conn.close()
+    
+    conn.commit()  # Confirmar cambios
+    conn.close()  # Cerrar conexión
 
+# ============================================================================
+# FUNCIÓN: get_sucursales_by_aseguradora
+# Obtiene todas las sucursales de una aseguradora específica
+# ============================================================================
 def get_sucursales_by_aseguradora(aseguradora_id):
+    """
+    Consulta las sucursales de una aseguradora
+    
+    Parámetros:
+        aseguradora_id (int): ID de la aseguradora
+    
+    Retorna:
+        list: Lista de tuplas con los datos de las sucursales
+    """
+    # Asegurar que la tabla existe
     ensure_sucursales_table()
+    
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('SELECT id, nombre, ciudad, direccion, telefono, email FROM sucursales WHERE aseguradora_id=?', (aseguradora_id,))
+    
+    # Consultar sucursales de la aseguradora
+    cursor.execute(
+        'SELECT id, nombre, ciudad, direccion, telefono, email FROM sucursales WHERE aseguradora_id=?', 
+        (aseguradora_id,)
+    )
     rows = cursor.fetchall()
-    conn.close()
+    
+    conn.close()  # Cerrar conexión
     return rows
 
+# ============================================================================
+# FUNCIÓN: get_ramos_options
+# Obtiene todos los ramos de seguros disponibles para selección
+# ============================================================================
 def get_ramos_options():
-    """Obtiene todos los ramos de seguros disponibles"""
+    """
+    Obtiene todos los ramos de seguros disponibles en el sistema
+    
+    Retorna:
+        list: Lista de tuplas (id, nombre) de ramos ordenados alfabéticamente
+    """
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
     try:
+        # Consultar todos los ramos ordenados por nombre
         cursor.execute("SELECT id, nombre FROM ramos_seguros ORDER BY nombre")
         ramos = cursor.fetchall()
+        # Retornar como lista de tuplas (id, nombre)
         return [(r[0], r[1]) for r in ramos]
+    
     except Exception as e:
+        # Mostrar error en la interfaz
         st.error(f"Error al obtener ramos: {str(e)}")
         return []
+    
     finally:
+        # Cerrar conexión
         conn.close()
 
+# ============================================================================
+# FUNCIÓN: get_aseguradora_ramos
+# Obtiene los ramos asociados a una aseguradora específica
+# ============================================================================
 def get_aseguradora_ramos(aseguradora_id):
-    """Obtiene los ramos asociados a una aseguradora"""
+    """
+    Consulta los ramos de seguros que ofrece una aseguradora
+    
+    Parámetros:
+        aseguradora_id (int): ID de la aseguradora
+    
+    Retorna:
+        list: Lista de tuplas (id, nombre) de ramos asociados
+    """
+    # Conectar a la base de datos
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
     try:
+        # Consultar ramos mediante JOIN con tabla de relación aseguradora_ramos
         cursor.execute('''
             SELECT r.id, r.nombre 
             FROM ramos_seguros r
@@ -71,9 +165,13 @@ def get_aseguradora_ramos(aseguradora_id):
             ORDER BY r.nombre
         ''', (aseguradora_id,))
         return cursor.fetchall()
+    
     except Exception:
+        # En caso de error, retornar lista vacía
         return []
+    
     finally:
+        # Cerrar conexión
         conn.close()
 
 def create_aseguradora(data, ramo_ids):

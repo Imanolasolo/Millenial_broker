@@ -1,15 +1,43 @@
-import streamlit as st
+# ============================================================================
+# DASHBOARD DE USUARIO ESTÁNDAR - user_dashboard.py
+# ============================================================================
+# Panel de control para usuarios estándar (no administradores)
+# Proporciona acceso limitado a funcionalidades básicas
+# ============================================================================
 
+import streamlit as st  # Framework de interfaz de usuario
+
+# ============================================================================
+# FUNCIÓN: user_dashboard
+# Renderiza el dashboard para usuarios estándar
+# ============================================================================
 def user_dashboard():
+    """
+    Muestra la interfaz principal para usuarios con rol estándar
+    Incluye opciones básicas de reportes, configuración y logout
+    """
+    # ============================================================================
+    # ENCABEZADO
+    # ============================================================================
     st.title("Dashboard de Usuario")
     st.write("Bienvenido, usuario")
 
-    # Reintroducir botones de Reportes y Configuración en el sidebar
+    # ============================================================================
+    # BARRA LATERAL: Opciones disponibles para el usuario
+    # ============================================================================
+    # Botón para acceder a reportes (funcionalidad a implementar)
     st.sidebar.button("Reportes")
+    # Botón para acceder a configuración (funcionalidad a implementar)
     st.sidebar.button("Configuración")
 
-    # Botón de Logout
+    # ============================================================================
+    # OPCIÓN DE CIERRE DE SESIÓN
+    # ============================================================================
+    # Botón para cerrar sesión
     if st.button("Logout"):
-        del st.session_state["token"]  # Eliminar el token de la sesión
+        # Eliminar el token JWT de la sesión de Streamlit
+        del st.session_state["token"]
+        # Mostrar mensaje de confirmación
         st.success("Sesión cerrada exitosamente")
-        st.rerun()  # Recargar la página para volver al login
+        # Recargar la página para volver a la pantalla de login
+        st.rerun()

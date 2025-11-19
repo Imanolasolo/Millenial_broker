@@ -1,5 +1,18 @@
-import streamlit as st
-import fitz  # PyMuPDF
+# ============================================================================
+# DASHBOARD DE ADMINISTRADOR - admin_dashboard.py
+# ============================================================================
+# Panel de control principal para usuarios con rol de administrador
+# Proporciona acceso completo a todos los módulos CRUD del sistema
+# ============================================================================
+
+# Importaciones de librerías
+import streamlit as st  # Framework de interfaz de usuario
+import fitz  # PyMuPDF para procesamiento de PDFs
+import os  # Operaciones del sistema operativo
+import datetime as dt  # Manejo de fechas
+import re  # Expresiones regulares
+
+# Importaciones comentadas: funcionalidad de IA/Chat deshabilitada
 #from langchain_text_splitters import RecursiveCharacterTextSplitter
 #from langchain.embeddings import OpenAIEmbeddings
 #from langchain.vectorstores import FAISS
@@ -7,46 +20,92 @@ import fitz  # PyMuPDF
 #from langchain.chains import ConversationalRetrievalChain
 #from langchain.chat_models import ChatOpenAI 
 #from htmlTemplates import css, bot_template, user_template
-import os
-import datetime as dt
-import re
 
-# Importa los CRUD UI desde el folder crud
-from crud.user_crud import crud_usuarios, get_user_details
-from crud.client_crud import crud_clientes
-from crud.aseguradora_crud import crud_aseguradoras
-from crud.agencias_crud import crud_agencias
-from crud.role_crud import crud_roles
-from crud.poliza_crud import crud_polizas
-from crud.ramos_crud import crud_ramos
-from crud.movimiento_crud import crud_movimientos
+# ============================================================================
+# IMPORTACIONES DE MÓDULOS CRUD
+# ============================================================================
+# Importa todas las interfaces CRUD desde el directorio crud/
+from crud.user_crud import crud_usuarios, get_user_details  # Gestión de usuarios
+from crud.client_crud import crud_clientes  # Gestión de clientes
+from crud.aseguradora_crud import crud_aseguradoras  # Gestión de aseguradoras
+from crud.agencias_crud import crud_agencias  # Gestión de agencias
+from crud.role_crud import crud_roles  # Gestión de roles
+from crud.poliza_crud import crud_polizas  # Gestión de pólizas
+from crud.ramos_crud import crud_ramos  # Gestión de ramos de seguros
+from crud.movimiento_crud import crud_movimientos  # Gestión de movimientos
 
+# ============================================================================
+# FUNCIÓN: get_pdf_text
+# Extrae texto de una lista de archivos PDF
+# ============================================================================
 def get_pdf_text(pdf_list):
-    text = ""
+    """
+    Extrae y concatena el texto de múltiples archivos PDF
+    
+    Parámetros:
+        pdf_list (list): Lista de rutas a archivos PDF
+    
+    Retorna:
+        str: Texto concatenado de todos los PDFs
+    """
+    text = ""  # String para acumular el texto extraído
+    
+    # Iterar sobre cada archivo PDF
     for pdf_path in pdf_list:
+        # Abrir el documento PDF con PyMuPDF (fitz)
         pdf_document = fitz.open(pdf_path)
+        
+        # Iterar sobre cada página del documento
         for page_num in range(len(pdf_document)):
+            # Cargar la página actual
             page = pdf_document.load_page(page_num)
+            # Extraer y concatenar el texto de la página
             text += page.get_text()
+    
     return text
 
 
 
+# ============================================================================
+# FUNCIÓN: admin_dashboard
+# Renderiza el dashboard completo del administrador
+# ============================================================================
 def admin_dashboard():
-    # Retrieve username from session state
+    """
+    Muestra la interfaz principal del administrador con acceso a todos los módulos
+    Incluye información del usuario, menús de navegación e instrucciones
+    """
+    # ============================================================================
+    # OBTENER INFORMACIÓN DEL USUARIO ACTUAL
+    # ============================================================================
+    # Recuperar nombre de usuario desde la sesión de Streamlit
     username = st.session_state.get("username")
+    # Obtener detalles completos del usuario (nombre, empresa, etc.)
     user_details = get_user_details(username) if username else None
 
-    # Display header with avatar, name, and group
-    st.sidebar.image("assets/avatar.png", width=100)  # Replace with the path to your avatar image
+    # ============================================================================
+    # BARRA LATERAL: Información del usuario
+    # ============================================================================
+    # Mostrar avatar del usuario
+    st.sidebar.image("assets/avatar.png", width=100)
+    # Mostrar nombre completo del usuario
     st.sidebar.markdown(f"**Usuario:** {user_details['full_name'] if user_details else 'Desconocido'}")
+    # Mostrar empresa/afiliación del usuario
     st.sidebar.markdown(f"**Afiliación:** {user_details['company_name'] if user_details else 'Sin afiliación'}")
 
+    # ============================================================================
+    # ENCABEZADO PRINCIPAL
+    # ============================================================================
+    # Crear dos columnas: pequeña para logo, grande para título
     col1, col2 = st.columns([1, 4])
     with col1:
+        # Logo de la aplicación
         st.image("assets/logo.png", width=100)
     with col2:
+        # Título del dashboard
         st.title("Dashboard de Administrador")
+    
+    # Mensaje de bienvenida
     st.write("Bienvenido, administrador")
 
     st.markdown("""

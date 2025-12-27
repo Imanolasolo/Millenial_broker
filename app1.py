@@ -13,13 +13,13 @@ import datetime  # Manejo de fechas y tiempos
 import bcrypt  # Encriptación de contraseñas con hash
 import base64  # Codificación de imágenes para mostrar en web
 import os  # Operaciones del sistema operativo
+import importlib  # Importación dinámica de módulos
 
 # Importación de módulos personalizados del proyecto
-from dashboards.admin_dashboard import admin_dashboard  # Dashboard de administrador
 from dbconfig import DB_FILE, SECRET_KEY  # Configuración de BD y clave secreta
-from user_dashboard import user_dashboard  # Dashboard de usuario estándar
 from crud.user_crud import create_user, read_users, update_user, delete_user, get_user_details  # Operaciones CRUD de usuarios
 from database_config import initialize_database  # Inicialización de la base de datos
+from user_dashboard import user_dashboard  # Dashboard de usuario genérico
 
 # ============================================================================
 # CONFIGURACIÓN INICIAL DE LA PÁGINA
@@ -237,6 +237,84 @@ def login_page():
     """, unsafe_allow_html=True)
 
 # ============================================================================
+# FUNCIÓN: get_dashboard_for_role
+# Busca y carga dinámicamente el dashboard correspondiente al rol del usuario
+# ============================================================================
+def get_dashboard_for_role(role):
+    """
+    Carga dinámicamente el dashboard correspondiente al rol del usuario
+    
+    Parámetros:
+        role (str): Rol del usuario
+    
+    Retorna:
+        tuple: (módulo, función_principal) o (None, None) si no existe
+    """
+    # Normalizar el rol para buscar el archivo correspondiente
+    normalized_role = role.lower().replace(" ", "_").replace("-", "_")
+    
+    # Lista de posibles nombres de archivo a buscar (en orden de prioridad)
+    possible_filenames = []
+    
+    # 1. Nombre exacto del rol con sufijo _dashboard
+    possible_filenames.append(f"{role.replace(' ', '_')}_dashboard")
+    
+    # 2. Nombre normalizado del rol con sufijo _dashboard
+    possible_filenames.append(f"{normalized_role}_dashboard")
+    
+    # 3. Mapeo específico de roles conocidos
+    dashboard_mapping = {
+        "admin": "admin_dashboard",
+        "ejecutivo_comercial": "Ejecutivo_Comercial_dashboard",
+        "seller": "Ejecutivo_Comercial_dashboard",
+        "back_office_operacion": "Back_Office_Operacion_dashboard",
+        "backofficeoperacion": "Back_Office_Operacion_dashboard",
+        "ejecutivo_siniestros": "Ejecutivo_Siniestros_dashboard",
+        "usuario": "user_dashboard",
+    }
+    
+    # Agregar el mapeo específico si existe
+    if normalized_role in dashboard_mapping:
+        possible_filenames.insert(0, dashboard_mapping[normalized_role])
+    
+    # Intentar cargar cada posible nombre de archivo
+    for dashboard_file in possible_filenames:
+        try:
+            # Intentar importar el módulo del dashboard
+            if dashboard_file == "user_dashboard":
+                # user_dashboard está en la raíz, no en /dashboards
+                module = importlib.import_module("user_dashboard")
+                dashboard_func = getattr(module, "user_dashboard", None)
+                if dashboard_func:
+                    return module, dashboard_func
+            else:
+                # Los demás dashboards están en /dashboards
+                try:
+                    module = importlib.import_module(f"dashboards.{dashboard_file}")
+                    
+                    # Buscar la función principal del dashboard
+                    # Prioridad: welcome_message + manage_modules, luego función específica
+                    if hasattr(module, "welcome_message") and hasattr(module, "manage_modules"):
+                        return module, "dual"  # Indica que tiene dos funciones
+                    elif hasattr(module, f"{normalized_role}_dashboard"):
+                        return module, getattr(module, f"{normalized_role}_dashboard")
+                    elif hasattr(module, "admin_dashboard"):
+                        return module, getattr(module, "admin_dashboard")
+                    else:
+                        # Si el módulo existe pero no tiene funciones estándar, usar "dual" por defecto
+                        return module, "dual"
+                except ImportError:
+                    # Intentar siguiente nombre de archivo
+                    continue
+        
+        except (AttributeError, Exception):
+            # Intentar siguiente nombre de archivo
+            continue
+    
+    # Si ningún archivo se pudo cargar, retornar None
+    return None, None
+
+# ============================================================================
 # FUNCIÓN: main
 # Función principal que gestiona el flujo de la aplicación
 # ============================================================================
@@ -258,30 +336,33 @@ def main():
             # Decodificar el token JWT para obtener la información del usuario
             payload = jwt.decode(st.session_state["token"], SECRET_KEY, algorithms=["HS256"])
             username = payload["username"]  # Extraer nombre de usuario
-            role = payload["role"]  # Extraer rol del usuario
+            role = payload.get("role")  # Extraer rol del usuario (usar .get() para evitar KeyError)
             
-            # Normalizar el rol para comparación robusta (sin espacios, guiones, guiones bajos)
-            # Esto permite que "Ejecutivo Comercial", "ejecutivo_comercial" y "ejecutivo-comercial" sean equivalentes
-            normalized_role = role.lower().replace(" ", "").replace("_", "").replace("-", "")
+            # Validar que el rol no sea None
+            if not role:
+                st.error("El usuario no tiene un rol asignado. Por favor contacte al administrador.")
+                del st.session_state["token"]
+                st.rerun()
+                return
             
+            # =========================================================================
+            # REDIRECCIÓN DINÁMICA SEGÚN EL ROL DEL USUARIO
             # ============================================================================
-            # REDIRECCIÓN SEGÚN EL ROL DEL USUARIO
-            # ============================================================================ correspondiente según el rol
-            if normalized_role == "admin":
-                # Usuario administrador: acceso completo a todos los módulos
-                admin_dashboard()
-            elif normalized_role in ["ejecutivocomercial", "seller"]:
-                # Ejecutivo comercial o vendedor: dashboard de ventas
-                from dashboards.Ejecutivo_Comercial_dashboard import welcome_message, manage_modules
-                welcome_message()  # Mostrar mensaje de bienvenida personalizado
-                manage_modules()  # Gestionar módulos disponibles para este rol
-            elif normalized_role in ["backofficeoperacion"]:
-                # Personal de back office: dashboard de operaciones
-                from dashboards.Back_Office_Operacion_dashboard import welcome_message, manage_modules
-                welcome_message()  # Mostrar mensaje de bienvenida personalizado
-                manage_modules()  # Gestionar módulos disponibles para este rol
+            # Buscar y cargar el dashboard correspondiente al rol
+            module, dashboard_func = get_dashboard_for_role(role)
+            
+            if module and dashboard_func:
+                # Si se encontró el dashboard, ejecutarlo
+                if dashboard_func == "dual":
+                    # Dashboard con welcome_message y manage_modules
+                    module.welcome_message()
+                    module.manage_modules()
+                else:
+                    # Dashboard con función única
+                    dashboard_func()
             else:
-                # Usuario estándar: dashboard básico
+                # Si no se encuentra dashboard específico, usar dashboard genérico
+                st.warning(f"No hay un dashboard específico para el rol '{role}'. Mostrando dashboard genérico.")
                 user_dashboard()
                 
         except jwt.ExpiredSignatureError:
@@ -289,6 +370,12 @@ def main():
             st.error("Sesión expirada, por favor inicie sesión nuevamente")
             del st.session_state["token"]  # Eliminar token expirado de la sesión
             st.rerun()  # Recargar la página para mostrar el login
+        except Exception as e:
+            # Capturar cualquier otro error y mostrar detalles para depuración
+            st.error(f"Error al cargar el dashboard: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+            # No eliminar el token para poder ver el error completo
     else:
         # Si no hay token en la sesión, mostrar la página de login
         login_page()

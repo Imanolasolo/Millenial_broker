@@ -831,17 +831,22 @@ def crud_polizas():
                 guardar_fact = st.button("Guardar datos de facturación")
 
                 if guardar_fact:
-                    # Campo eliminado: anexos_poliza
-                    # anexos_poliza = [a for a in anexos_list if a and str(a).strip()]
+                    # Validar que se hayan seleccionado ramos
+                    if not st.session_state.get("ramos_seleccionados"):
+                        st.error("⚠️ Debe seleccionar al menos un ramo de seguro antes de guardar.")
+                        return
                     
                     # Obtener datos de la relación asegurado-contratante
                     poliza_data = st.session_state.get("poliza_form_data", {})
+                    
+                    # Convertir la lista de ramos seleccionados a string separado por comas (nombres en lugar de IDs)
+                    ramos_nombres = ", ".join([str(ramo[1]) for ramo in st.session_state.get("ramos_seleccionados", [])])
                     
                     st.session_state["facturacion_data"] = {
                         "tipo_renovacion": tipo_renovacion,
                         "gestion_cobro": selected_ejecutivo[0] if selected_ejecutivo else None,
                         "liberacion_comision": liberacion_comision,
-                        "ramo_id": None,
+                        "ramo_id": ramos_nombres,  # Guardar como string con nombres separados por comas
                         "suma_asegurada": suma_asegurada_db,
                         "prima_neta": prima_neta_db,
                         "observaciones_poliza": observaciones_ramos,
@@ -854,15 +859,14 @@ def crud_polizas():
                         "total": total,
                         "cuotas": cuotas,
                         "valor_cuota_inicial": valor_cuota_inicial,
-                        "valor_cuotas_financiadas": valor_cuotas_financiadas,  # <-- Guardar en la base de datos
-                        # "anexos_poliza": str(anexos_poliza),  # Campo eliminado
+                        "valor_cuotas_financiadas": valor_cuotas_financiadas,
                         "tipo_factura": tipo_factura,
                         "agrupadora": selected_agrupadora[0] if selected_agrupadora else None,
                         # Nuevos campos de beneficiario
                         "asegurado_contratante": asegurado_contratante,
                         "beneficiario": beneficiario_nombre if asegurado_contratante == "No" else "",
                         "id_beneficiario": id_beneficiario if asegurado_contratante == "No" else "",
-                        "formas_de_pago": formas_de_pago,  # <-- Asegúrate de que esto está aquí
+                        "formas_de_pago": formas_de_pago,
                     }
                     # Persistir la factura provisionalmente en la tabla `facturas` para que quede registrada
                     try:
@@ -1013,12 +1017,49 @@ def crud_polizas():
                             except Exception:
                                 pass
     elif operation == "Leer":
+        # Agregar estilos CSS para las tarjetas
+        st.markdown("""
+        <style>
+        .poliza-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            color: white;
+        }
+        .poliza-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+        }
+        .poliza-numero {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .poliza-info {
+            font-size: 14px;
+            margin: 5px 0;
+            opacity: 0.9;
+        }
+        .poliza-estado {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        # Obtener todos los campos de la tabla polizas
+        
+        # Asegurar que exista la columna canonical 'estado'
         cursor.execute("PRAGMA table_info(polizas)")
         all_fields = [row[1] for row in cursor.fetchall()]
-        # Asegurar que exista la columna canonical 'estado' para estandarizar el guardado/lectura
         if "estado" not in all_fields:
             try:
                 cursor.execute("ALTER TABLE polizas ADD COLUMN estado TEXT")
@@ -1027,7 +1068,7 @@ def crud_polizas():
             except Exception:
                 pass
 
-        # Construir diccionario de clientes para generar labels en el selectbox (sin usar tomador fields)
+        # Construir diccionario de clientes
         cursor.execute("SELECT id, tipo_cliente, nombres, apellidos, razon_social FROM clients")
         clients_rows = cursor.fetchall()
         clientes_dict = {}
@@ -1038,229 +1079,219 @@ def crud_polizas():
             else:
                 clientes_dict[row[0]] = f"{(row[2] or '').strip()} {(row[3] or '').strip()}".strip()
 
-        # --- Cambiado: detectar si existe columna tomador_nombre y, si existe, incluirla en la consulta ---
+        # Obtener todas las pólizas con información adicional
         cursor.execute("PRAGMA table_info(polizas)")
         pol_cols = [r[1] for r in cursor.fetchall()]
-        select_fields = "id, numero_poliza, cliente_id"
+        
+        select_fields = ["id", "numero_poliza", "cliente_id", "aseguradora_id", "fecha_inicio", "fecha_fin"]
         if "tomador_nombre" in pol_cols:
-            select_fields += ", tomador_nombre"
-        cursor.execute(f"SELECT {select_fields} FROM polizas ORDER BY numero_poliza")
+            select_fields.append("tomador_nombre")
+        if "estado" in pol_cols:
+            select_fields.append("estado")
+        elif "estado_poliza" in pol_cols:
+            select_fields.append("estado_poliza")
+        if "suma_asegurada" in pol_cols:
+            select_fields.append("suma_asegurada")
+        if "prima_neta" in pol_cols:
+            select_fields.append("prima_neta")
+            
+        cursor.execute(f"SELECT {', '.join(select_fields)} FROM polizas ORDER BY fecha_inicio DESC")
         pol_rows = cursor.fetchall()
-        conn.close()
+        
+        # Obtener nombres de aseguradoras
+        cursor.execute("SELECT id, razon_social FROM aseguradoras")
+        aseguradoras_dict = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        # Obtener nombres de sucursales
+        cursor.execute("SELECT id, nombre FROM sucursales")
+        sucursales_dict = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        # Obtener nombres de agrupadoras
+        cursor.execute("SELECT id, name FROM companies")
+        agrupadoras_dict = {row[0]: row[1] for row in cursor.fetchall()}
 
         if not pol_rows:
-            st.info("No hay pólizas registradas.")
-        else:
-            # Crear opciones para el selectbox: (id, "NUMERO — Cliente/Razón social" prefiriendo tomador_nombre)
-            options = []
-            for r in pol_rows:
-                # soporta filas con o sin tomador_nombre
-                if len(r) == 4:
-                    pid, num, cliente_id, tomador_nombre = r
-                else:
-                    pid, num, cliente_id = r
-                    tomador_nombre = None
-                client_name = "(Sin solicitante)"
-                if tomador_nombre and str(tomador_nombre).strip().lower() not in ("none", ""):
-                    client_name = tomador_nombre
-                elif cliente_id and cliente_id in clientes_dict:
-                    client_name = clientes_dict[cliente_id] or client_name
-                label = f"{num or '(Sin número)'} — {client_name}"
-                options.append((pid, label))
+            st.info("📋 No hay pólizas registradas.")
+            conn.close()
+            return
 
-            selected = st.selectbox("Selecciona una póliza", options, format_func=lambda x: x[1] if x else "")
+        st.markdown(f"### 📊 Total de Pólizas: {len(pol_rows)}")
+        st.divider()
+        
+        # Filtros
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            estados_disponibles = list(set([row[7] if len(row) > 7 and row[7] else "Sin estado" for row in pol_rows]))
+            filtro_estado = st.multiselect("Filtrar por estado", ["Todos"] + estados_disponibles, default=["Todos"])
+        
+        with col2:
+            aseguradoras_disponibles = list(set([aseguradoras_dict.get(row[3], "Sin aseguradora") for row in pol_rows if len(row) > 3]))
+            filtro_aseguradora = st.multiselect("Filtrar por aseguradora", ["Todas"] + aseguradoras_disponibles, default=["Todas"])
+        
+        with col3:
+            buscar = st.text_input("🔍 Buscar por número de póliza", placeholder="Ej: PRG-1")
 
-            if not selected:
-                st.info("Seleccione una póliza para ver sus detalles.")
-            else:
-                # Cargar la póliza seleccionada (todas las columnas) y reutilizar la lógica de visualización existente
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                cursor.execute("PRAGMA table_info(polizas)")
-                all_fields = [row[1] for row in cursor.fetchall()]
-                try:
-                    cursor.execute(f"SELECT {', '.join(all_fields)} FROM polizas WHERE id=?", (selected[0],))
-                    poliza_row = cursor.fetchone()
-                except Exception:
-                    poliza_row = None
+        # Aplicar filtros
+        pol_rows_filtradas = pol_rows
+        if "Todos" not in filtro_estado:
+            pol_rows_filtradas = [r for r in pol_rows_filtradas if (len(r) > 7 and r[7] in filtro_estado) or (len(r) <= 7 and "Sin estado" in filtro_estado)]
+        
+        if "Todas" not in filtro_aseguradora:
+            pol_rows_filtradas = [r for r in pol_rows_filtradas if aseguradoras_dict.get(r[3], "Sin aseguradora") in filtro_aseguradora]
+        
+        if buscar:
+            pol_rows_filtradas = [r for r in pol_rows_filtradas if buscar.upper() in str(r[1]).upper()]
 
-                # Obtener nombres legibles para aseguradora, sucursal y agrupadora
-                cursor.execute("SELECT id, razon_social FROM aseguradoras")
-                aseguradoras_dict = {row[0]: row[1] for row in cursor.fetchall()}
-                cursor.execute("SELECT id, nombre FROM sucursales")
-                sucursales_dict = {row[0]: row[1] for row in cursor.fetchall()}
-                cursor.execute("SELECT id, name FROM companies")
-                agrupadoras_dict = {row[0]: row[1] for row in cursor.fetchall()}
-                # Asegurar clientes_dict actualizado
-                cursor.execute("SELECT id, tipo_cliente, nombres, apellidos, razon_social FROM clients")
-                clientes_dict = {
-                    row[0]: (row[4] if (row[1] or "").lower() in ("persona jurídica", "persona juridica", "empresa") else f"{row[2]} {row[3]}".strip())
-                    for row in cursor.fetchall()
-                }
-                conn.close()
+        if not pol_rows_filtradas:
+            st.warning("⚠️ No se encontraron pólizas con los filtros aplicados.")
+            conn.close()
+            return
 
-                if poliza_row:
-                    polizas = [poliza_row]
-                    import json
-
-                    if polizas:
-                        st.markdown("### Póliza seleccionada (JSON)")
-                        for idx, row in enumerate(polizas):
-                            poliza_dict = dict(zip(all_fields, row))
-                            result = {}
-                            result["numero_poliza"] = poliza_dict.get("numero_poliza", "")
-                            # Obtener solicitante solo desde cliente_id (no usamos tomador_id/tomador_nombre)
-                            solicitante = "(Sin solicitante)"
-                            cliente_id = poliza_dict.get("cliente_id")
-                            if cliente_id and cliente_id in clientes_dict:
-                                solicitante = clientes_dict[cliente_id]
-                            result["solicitante"] = solicitante
-                            # Mostrar la aseguradora
-                            aseguradora_nombre = ""
-                            aseguradora_id = poliza_dict.get("aseguradora_id")
-                            if aseguradora_id in aseguradoras_dict:
-                                aseguradora_nombre = aseguradoras_dict[aseguradora_id]
-                            result["aseguradora"] = aseguradora_nombre if aseguradora_nombre else "(Sin aseguradora)"
-                            # Mostrar la sucursal
-                            sucursal_nombre = ""
-                            sucursal_id = poliza_dict.get("sucursal_id")
-                            if sucursal_id:
-                                try:
-                                    if not isinstance(sucursal_id, int):
-                                        sucursal_id = int(sucursal_id)
-                                except Exception:
-                                    sucursal_id = None
-                            if sucursal_id and sucursal_id in sucursales_dict:
-                                sucursal_nombre = sucursales_dict[sucursal_id]
-                            result["sucursal"] = sucursal_nombre if sucursal_nombre else "(Sin sucursal)"
-                            # Mostrar suma asegurada
-                            suma_asegurada = poliza_dict.get("suma_asegurada", "")
-                            result["suma_asegurada"] = suma_asegurada if suma_asegurada else "(Sin suma asegurada)"
-                            # Mostrar beneficiario
-                            beneficiario = poliza_dict.get("beneficiario", "")
-                            result["beneficiario"] = beneficiario if beneficiario else "(Sin beneficiario)"
-                            # Mostrar prima neta
-                            prima_neta = poliza_dict.get("prima_neta", "")
-                            result["prima_neta"] = prima_neta if prima_neta else "(Sin prima neta)"
-
-                            # Mostrar dirección y contenido
-                            direccion = poliza_dict.get("direccion", "")
-                            result["direccion"] = direccion if direccion else "(Sin dirección)"
-                            contenido = poliza_dict.get("contenido", "")
-                            result["contenido"] = contenido if contenido else "(Sin contenido)"
+        st.markdown(f"**Mostrando {len(pol_rows_filtradas)} pólida(s)**")
+        
+        # Mostrar pólizas en tarjetas (2 columnas)
+        for idx in range(0, len(pol_rows_filtradas), 2):
+            cols = st.columns(2)
+            
+            for col_idx, col in enumerate(cols):
+                if idx + col_idx < len(pol_rows_filtradas):
+                    row = pol_rows_filtradas[idx + col_idx]
+                    
+                    with col:
+                        # Extraer información de la fila
+                        poliza_id = row[0]
+                        numero_poliza = row[1] or "(Sin número)"
+                        cliente_id = row[2]
+                        aseguradora_id = row[3]
+                        fecha_inicio = row[4] if len(row) > 4 else ""
+                        fecha_fin = row[5] if len(row) > 5 else ""
+                        tomador_nombre = row[6] if len(row) > 6 and "tomador_nombre" in select_fields else None
+                        estado = row[7] if len(row) > 7 else "Sin estado"
+                        suma_asegurada = row[8] if len(row) > 8 else ""
+                        prima_neta = row[9] if len(row) > 9 else ""
+                        
+                        # Obtener nombre del cliente
+                        client_name = "(Sin solicitante)"
+                        if tomador_nombre and str(tomador_nombre).strip().lower() not in ("none", ""):
+                            client_name = tomador_nombre
+                        elif cliente_id and cliente_id in clientes_dict:
+                            client_name = clientes_dict[cliente_id] or client_name
+                        
+                        # Obtener nombre de aseguradora
+                        aseguradora_nombre = aseguradoras_dict.get(aseguradora_id, "(Sin aseguradora)")
+                        
+                        # Color de estado
+                        estado_colors = {
+                            "Borrador": "🟡",
+                            "Emitida": "🟢",
+                            "Anulada": "🔴",
+                            "Activa": "🟢",
+                            "Pagada": "🟢",
+                            "Pendiente de Pago": "🟠"
+                        }
+                        estado_icon = estado_colors.get(estado, "⚪")
+                        
+                        # Crear tarjeta con expander
+                        with st.expander(f"📄 {numero_poliza}", expanded=False):
+                            st.markdown(f"""
+                            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                        border-radius: 10px; padding: 15px; color: white; margin-bottom: 10px;'>
+                                <div style='font-size: 20px; font-weight: bold; margin-bottom: 10px;'>
+                                    {numero_poliza}
+                                </div>
+                                <div style='font-size: 14px; opacity: 0.9;'>
+                                    👤 <strong>Cliente:</strong> {client_name}<br>
+                                    🏢 <strong>Aseguradora:</strong> {aseguradora_nombre}<br>
+                                    📅 <strong>Vigencia:</strong> {fecha_inicio} → {fecha_fin}<br>
+                                    {estado_icon} <strong>Estado:</strong> {estado}
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
                             
-                            # Estado
-                            estado_val = poliza_dict.get("estado") or poliza_dict.get("estado_poliza") or ""
-                            estado_display = estado_val if estado_val else "(Sin estado)"
-                            result["estado"] = estado_display
-                            st.info(f"Poliza: {result.get('numero_poliza', '(Sin número)')} → Estado: {estado_display}")
+                            # Obtener detalles completos de la póliza
+                            cursor.execute("PRAGMA table_info(polizas)")
+                            all_fields = [row[1] for row in cursor.fetchall()]
+                            cursor.execute(f"SELECT {', '.join(all_fields)} FROM polizas WHERE id=?", (poliza_id,))
+                            poliza_row = cursor.fetchone()
+                            
+                            if poliza_row:
+                                poliza_dict = dict(zip(all_fields, poliza_row))
+                                
+                                # Información adicional en tabs
+                                tab1, tab2, tab3 = st.tabs(["📋 Detalles", "💰 Facturación", "📊 Documentos"])
+                                
+                                with tab1:
+                                    st.markdown("**Información General**")
+                                    col_a, col_b = st.columns(2)
+                                    with col_a:
+                                        st.text_input("Suma Asegurada", value=poliza_dict.get("suma_asegurada", ""), disabled=True, key=f"suma_{poliza_id}")
+                                        st.text_input("Prima Neta", value=poliza_dict.get("prima_neta", ""), disabled=True, key=f"prima_{poliza_id}")
+                                        
+                                        # Mostrar ramos asociados (ya están como nombres)
+                                        ramos_nombres = poliza_dict.get("ramo_id", "")
+                                        if ramos_nombres and str(ramos_nombres).strip():
+                                            st.text_area("Ramos de Seguro", value=ramos_nombres, disabled=True, key=f"ramos_{poliza_id}", height=80)
+                                        else:
+                                            st.text_input("Ramos de Seguro", value="Sin ramos asignados", disabled=True, key=f"ramos_{poliza_id}")
+                                    with col_b:
+                                        st.text_input("Beneficiario", value=poliza_dict.get("beneficiario", ""), disabled=True, key=f"benef_{poliza_id}")
+                                        st.text_input("ID Beneficiario", value=poliza_dict.get("id_beneficiario", ""), disabled=True, key=f"id_benef_{poliza_id}")
+                                    
+                                    st.text_area("Dirección", value=poliza_dict.get("direccion", ""), disabled=True, height=80, key=f"dir_{poliza_id}")
+                                    st.text_area("Contenido", value=poliza_dict.get("contenido", ""), disabled=True, height=80, key=f"cont_{poliza_id}")
+                                
+                                with tab2:
+                                    st.markdown("**Información de Facturación**")
+                                    col_a, col_b = st.columns(2)
+                                    with col_a:
+                                        st.text_input("Número Factura", value=poliza_dict.get("numero_factura", ""), disabled=True, key=f"nfact_{poliza_id}")
+                                        st.text_input("Subtotal", value=poliza_dict.get("subtotal", ""), disabled=True, key=f"sub_{poliza_id}")
+                                        st.text_input("IVA", value=poliza_dict.get("iva_15", ""), disabled=True, key=f"iva_{poliza_id}")
+                                    with col_b:
+                                        st.text_input("Total", value=poliza_dict.get("total", ""), disabled=True, key=f"tot_{poliza_id}")
+                                        st.text_input("Cuotas", value=poliza_dict.get("cuotas", ""), disabled=True, key=f"cuot_{poliza_id}")
+                                        st.text_input("Forma de Pago", value=poliza_dict.get("formas_de_pago", ""), disabled=True, key=f"fpago_{poliza_id}")
+                                
+                                with tab3:
+                                    # Movimientos asociados
+                                    try:
+                                        cursor.execute("""
+                                            SELECT m.id, m.codigo_movimiento, m.tipo_movimiento, m.estado, m.fecha_movimiento
+                                            FROM movimientos_poliza m
+                                            WHERE m.poliza_id = ?
+                                            ORDER BY m.fecha_movimiento DESC
+                                        """, (poliza_id,))
+                                        movimientos = cursor.fetchall()
+                                        
+                                        if movimientos:
+                                            st.markdown("**📝 Movimientos**")
+                                            import pandas as pd
+                                            df_mov = pd.DataFrame(movimientos, columns=['ID', 'Código', 'Tipo', 'Estado', 'Fecha'])
+                                            st.dataframe(df_mov, use_container_width=True, hide_index=True)
+                                        else:
+                                            st.info("Sin movimientos registrados")
+                                    except Exception:
+                                        pass
+                                    
+                                    # Facturas
+                                    try:
+                                        cursor.execute("""
+                                            SELECT numero_factura, fecha_emision, total, estado
+                                            FROM facturas WHERE poliza_id = ?
+                                        """, (poliza_id,))
+                                        facturas = cursor.fetchall()
+                                        
+                                        if facturas:
+                                            st.markdown("**💵 Facturas**")
+                                            import pandas as pd
+                                            df_fact = pd.DataFrame(facturas, columns=['Número', 'Fecha', 'Total', 'Estado'])
+                                            st.dataframe(df_fact, use_container_width=True, hide_index=True)
+                                        else:
+                                            st.info("Sin facturas registradas")
+                                    except Exception:
+                                        pass
 
-                            # Movimientos asociados
-                            try:
-                                conn_mov = sqlite3.connect(DB_FILE)
-                                cur_mov = conn_mov.cursor()
-                                cur_mov.execute("""
-                                    SELECT m.id, m.codigo_movimiento, m.tipo_movimiento, m.estado, m.fecha_movimiento
-                                    FROM movimientos_poliza m
-                                    JOIN polizas p ON m.poliza_id = p.id
-                                    WHERE p.numero_poliza = ?
-                                    ORDER BY m.fecha_movimiento DESC
-                                """, (poliza_dict.get("numero_poliza"),))
-                                movimientos_asociados = cur_mov.fetchall()
-
-                                if movimientos_asociados:
-                                    import pandas as pd
-                                    df_mov = pd.DataFrame(movimientos_asociados, columns=['ID', 'Código', 'Tipo', 'Estado', 'Fecha'])
-                                    st.markdown("**Movimientos asociados a esta póliza:**")
-                                    st.dataframe(df_mov, use_container_width=True, hide_index=True)
-                                    result["movimientos"] = [
-                                        {"id": m[0], "codigo_movimiento": m[1], "tipo_movimiento": m[2], "estado": m[3], "fecha_movimiento": m[4]}
-                                        for m in movimientos_asociados
-                                    ]
-                                else:
-                                    result["movimientos"] = []
-                                    st.info("ℹ️ Esta póliza no tiene movimientos asociados.")
-                            except Exception:
-                                result["movimientos"] = []
-                            finally:
-                                try:
-                                    conn_mov.close()
-                                except Exception:
-                                    pass
-
-                            # Facturas vinculadas
-                            try:
-                                conn_f = sqlite3.connect(DB_FILE)
-                                cur_f = conn_f.cursor()
-                                cur_f.execute(
-                                    "SELECT id, numero_factura, movimiento_id, cliente_id, fecha_emision, monto_neto, impuestos, iva, total, estado FROM facturas WHERE poliza_id = ?",
-                                    (poliza_dict.get('id'),)
-                                )
-                                fact_rows = cur_f.fetchall()
-                                if fact_rows:
-                                    import pandas as pd
-                                    df_f = pd.DataFrame(fact_rows, columns=['ID', 'Número Factura', 'Movimiento ID', 'Cliente ID', 'Fecha Emisión', 'Monto Neto', 'Impuestos', 'IVA', 'Total', 'Estado'])
-                                    st.markdown('**Facturas vinculadas a esta póliza:**')
-                                    st.dataframe(df_f, use_container_width=True, hide_index=True)
-                                    result['facturas'] = [
-                                        {
-                                            'id': f[0], 'numero_factura': f[1], 'movimiento_id': f[2], 'cliente_id': f[3],
-                                            'fecha_emision': f[4], 'monto_neto': f[5], 'impuestos': f[6], 'iva': f[7], 'total': f[8], 'estado': f[9]
-                                        }
-                                        for f in fact_rows
-                                    ]
-                                else:
-                                    result['facturas'] = []
-                                conn_f.close()
-                            except Exception:
-                                result['facturas'] = []
-
-                            # Notas de crédito vinculadas
-                            try:
-                                conn_nc = sqlite3.connect(DB_FILE)
-                                cur_nc = conn_nc.cursor()
-                                cur_nc.execute(
-                                    "SELECT id, numero_nota, factura_id, movimiento_id, cliente_id, fecha_emision, monto_neto, impuestos, iva, total, motivo, estado FROM notas_de_credito WHERE poliza_id = ?",
-                                    (poliza_dict.get('id'),)
-                                )
-                                notas_rows = cur_nc.fetchall()
-                                if notas_rows:
-                                    import pandas as pd
-                                    df_nc = pd.DataFrame(notas_rows, columns=['ID', 'Número Nota', 'Factura ID', 'Movimiento ID', 'Cliente ID', 'Fecha Emisión', 'Monto Neto', 'Impuestos', 'IVA', 'Total', 'Motivo', 'Estado'])
-                                    st.markdown('**Notas de crédito vinculadas a esta póliza:**')
-                                    st.dataframe(df_nc, use_container_width=True, hide_index=True)
-                                    result['notas_de_credito'] = [
-                                        {
-                                            'id': n[0], 'numero_nota': n[1], 'factura_id': n[2], 'movimiento_id': n[3], 'cliente_id': n[4],
-                                            'fecha_emision': n[5], 'monto_neto': n[6], 'impuestos': n[7], 'iva': n[8], 'total': n[9], 'motivo': n[10], 'estado': n[11]
-                                        }
-                                        for n in notas_rows
-                                    ]
-                                else:
-                                    result['notas_de_credito'] = []
-                                conn_nc.close()
-                            except Exception:
-                                result['notas_de_credito'] = []
-
-                            # Otros campos visibles
-                            formas_de_pago = poliza_dict.get("formas_de_pago", "")
-                            result["formas_de_pago"] = formas_de_pago if formas_de_pago else "(Sin formas de pago)"
-                            cuotas = poliza_dict.get("cuotas", "")
-                            result["cuotas"] = cuotas if cuotas else "(Sin cuotas)"
-                            subtotal = poliza_dict.get("subtotal", "")
-                            result["subtotal"] = subtotal if subtotal else "(Sin subtotal)"
-                            total = poliza_dict.get("total", "")
-                            result["total"] = total if total else "(Sin total)"
-                            observaciones_val = poliza_dict.get("observaciones", "")
-                            result["observaciones"] = observaciones_val if observaciones_val else "(Sin observaciones)"
-
-                            st.markdown(f"#### Póliza seleccionada")
-                            st.code(json.dumps(result, indent=2, ensure_ascii=False), language="json")
-                            st.markdown("---")
-                    else:
-                        st.info("No hay pólizas registradas.")
-                else:
-                    st.error("No se encontró la póliza seleccionada.")
+        conn.close()
     elif operation == "Modificar":
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()

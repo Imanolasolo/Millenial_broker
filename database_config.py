@@ -3,8 +3,12 @@ import os
 from dbconfig import DB_FILE
 
 def initialize_database():
+    """
+    Inicializa la base de datos creando todas las tablas necesarias si no existen
+    """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    
     try:
         # Tabla de clientes
         cursor.execute('''
@@ -151,6 +155,82 @@ def initialize_database():
                 ejecutivo_comercial_id INTEGER
             )
         ''')
+        # Tabla de siniestros
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS siniestros (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_siniestro TEXT UNIQUE NOT NULL,
+                poliza_id INTEGER NOT NULL,
+                cliente_id INTEGER,
+                tipo_siniestro TEXT NOT NULL,  -- 'Vehicular' o 'Vida/Salud'
+                fecha_siniestro DATE NOT NULL,
+                fecha_registro DATE DEFAULT CURRENT_DATE,
+                estado TEXT DEFAULT 'En Proceso',  -- 'En Proceso', 'En Reparación', 'Cerrado', 'Rechazado', 'En Revisión', 'Aprobado', 'Pagado'
+                
+                -- Campos específicos para siniestros vehiculares
+                placa_vehiculo TEXT,
+                lugar_siniestro TEXT,
+                tipo_dano TEXT,  -- 'Choque', 'Robo', 'Incendio', 'Vandalismo', 'Otro'
+                taller_id INTEGER,
+                
+                -- Campos específicos para siniestros de vida/salud
+                tipo_cobertura TEXT,  -- 'Hospitalización', 'Cirugía', 'Emergencia', 'Consulta', 'Fallecimiento'
+                centro_medico TEXT,
+                diagnostico TEXT,
+                
+                -- Campos comunes
+                descripcion TEXT,
+                monto_estimado REAL,
+                monto_reclamado REAL,
+                monto_aprobado REAL,
+                observaciones TEXT,
+                documentos_adjuntos TEXT,  -- JSON con rutas de archivos
+                
+                -- Usuario que registró el siniestro
+                usuario_registro_id INTEGER,
+                
+                -- Timestamps
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                
+                FOREIGN KEY (poliza_id) REFERENCES polizas(id) ON DELETE CASCADE,
+                FOREIGN KEY (cliente_id) REFERENCES clients(id),
+                FOREIGN KEY (usuario_registro_id) REFERENCES users(id)
+            )
+        ''')
+        # Tabla de talleres
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS talleres (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                ruc TEXT,
+                telefono TEXT,
+                email TEXT,
+                direccion TEXT,
+                ciudad TEXT,
+                especialidad TEXT,
+                estado TEXT DEFAULT 'Activo',  -- 'Activo', 'Inactivo'
+                observaciones TEXT,
+                fecha_registro DATE DEFAULT CURRENT_DATE
+            )
+        ''')
+        # Tabla de clinicas_hospitales
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clinicas_hospitales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                ruc TEXT,
+                telefono TEXT,
+                email TEXT,
+                direccion TEXT,
+                ciudad TEXT,
+                tipo TEXT,  -- 'Clínica', 'Hospital', 'Centro Médico'
+                especialidades TEXT,  -- JSON con lista de especialidades
+                estado TEXT DEFAULT 'Activo',  -- 'Activo', 'Inactivo'
+                observaciones TEXT,
+                fecha_registro DATE DEFAULT CURRENT_DATE
+            )
+        ''')
+        
         conn.commit()
     finally:
         conn.close()

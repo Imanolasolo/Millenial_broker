@@ -253,6 +253,39 @@ def get_user_details(username):
         conn.close()
 
 # ============================================================================
+# FUNCIÓN: get_available_roles
+# Obtiene los roles disponibles desde la base de datos
+# ============================================================================
+def get_available_roles():
+    """
+    Obtiene la lista de roles disponibles desde la tabla roles
+    Si la tabla no existe o está vacía, retorna roles por defecto
+    
+    Retorna:
+        list: Lista de nombres de roles disponibles
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    try:
+        # Intentar obtener roles de la tabla roles
+        cursor.execute("SELECT name FROM roles ORDER BY name")
+        roles = [row[0] for row in cursor.fetchall()]
+        
+        # Si no hay roles en la BD, usar valores por defecto
+        if not roles:
+            roles = ["Admin", "Ejecutivo Comercial", "Back Office Operacion", "Usuario"]
+        
+        return roles
+    
+    except sqlite3.OperationalError:
+        # Si la tabla roles no existe, retornar roles por defecto
+        return ["Admin", "Ejecutivo Comercial", "Back Office Operacion", "Usuario"]
+    
+    finally:
+        conn.close()
+
+# ============================================================================
 # FUNCIÓN: crud_usuarios
 # Interfaz de usuario Streamlit para gestionar usuarios (CRUD completo)
 # ============================================================================
@@ -273,13 +306,26 @@ def crud_usuarios():
         password = st.text_input("Contraseña", type="password")
         nombres = st.text_input("Nombres")
         apellidos = st.text_input("Apellidos")
+        
+        # Obtener roles disponibles desde la base de datos
+        roles_disponibles = get_available_roles()
+        
+        # Selector de rol del usuario
+        role = st.selectbox(
+            "Rol del usuario",
+            roles_disponibles,
+            index=len(roles_disponibles) - 1  # Por defecto el último rol (usualmente "Usuario")
+        )
+        
         company_id = st.text_input("ID de la compañía (opcional)")
+        
         if st.button("Crear Usuario"):
             result = create_user(
                 username=username,
                 password=password,
                 nombres=nombres,
                 apellidos=apellidos,
+                role=role,
                 company_id=company_id if company_id else None
             )
             st.success(result)
@@ -288,7 +334,7 @@ def crud_usuarios():
         st.header("Usuarios")
         users = read_users()
         for user in users:
-            st.write(f"{user['username']} - {user['nombres']} {user['apellidos']} - {user['company_name'] or 'Sin afiliación'}")
+            st.write(f"{user['username']} - {user['nombres']} {user['apellidos']} - Rol: {user.get('role', 'Sin rol')} - {user['company_name'] or 'Sin afiliación'}")
 
     elif operation == "Modificar":
         st.header("Modificar Usuario")
@@ -310,11 +356,22 @@ def crud_usuarios():
         if selected_user:
             nuevos_nombres = st.text_input("Nuevos nombres", value=selected_user.get("nombres", ""))
             nuevos_apellidos = st.text_input("Nuevos apellidos", value=selected_user.get("apellidos", ""))
-            nueva_contrasena = st.text_input("Nueva contraseña", type="password")
+            
+            # Obtener roles disponibles desde la base de datos
+            roles_disponibles = get_available_roles()
+            
+            # Selector de rol para modificar
+            rol_actual = selected_user.get("role", "Usuario")
+            index_rol = roles_disponibles.index(rol_actual) if rol_actual in roles_disponibles else len(roles_disponibles) - 1
+            nuevo_rol = st.selectbox("Rol del usuario", roles_disponibles, index=index_rol)
+            
+            nueva_contrasena = st.text_input("Nueva contraseña (dejar vacío para no cambiar)", type="password")
+            
             if st.button("Actualizar Usuario"):
                 updates = {
                     "nombres": nuevos_nombres,
                     "apellidos": nuevos_apellidos,
+                    "role": nuevo_rol,
                 }
                 if nueva_contrasena:
                     updates["password"] = nueva_contrasena

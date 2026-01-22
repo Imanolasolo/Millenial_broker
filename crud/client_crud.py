@@ -99,7 +99,7 @@ def crud_clientes():
         tipo_cliente = st.selectbox("Tipo de Cliente", ["Persona Natural", "Persona Jurídica"])
         if tipo_cliente == "Persona Natural":
             with st.form("form_cliente_persona_natural"):
-                tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte"])
+                tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte", "RUC"])
                 col1, col2 = st.columns(2)
                 with col1:
                     nombres = st.text_input("Nombres (máx 50 caracteres)", key="cliente_nombres")
@@ -111,11 +111,13 @@ def crud_clientes():
                     st.error("El campo 'Apellidos' no puede exceder 50 caracteres.")
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.text(f"Tipo de Documento: {tipo_documento}")
+                    numero_documento = st.text_input("Número de Documento")
                 with col2:
-                    numero_documento = st.text_input("Número de Cédula/Pasaporte")
+                    st.empty()
                 if tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
                     st.error("El número de Cédula debe tener exactamente 10 caracteres.")
+                if tipo_documento == "RUC" and numero_documento and len(numero_documento) != 13:
+                    st.error("El número de RUC debe tener exactamente 13 caracteres.")
                 col1, col2 = st.columns(2)
                 with col1:    
                     fecha_nacimiento = st.date_input(
@@ -187,6 +189,8 @@ def crud_clientes():
                         st.error("El campo 'Nombres' y/o 'Apellidos' no puede exceder 50 caracteres.")
                     elif tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
                         st.error("El número de Cédula debe tener exactamente 10 caracteres.")
+                    elif tipo_documento == "RUC" and numero_documento and len(numero_documento) != 13:
+                        st.error("El número de RUC debe tener exactamente 13 caracteres.")
                     elif fecha_nacimiento > dt.date.today():
                         st.error("La fecha de nacimiento no puede ser mayor que hoy.")
                     elif correo_electronico and not re.match(email_pattern, correo_electronico):
@@ -414,7 +418,13 @@ def crud_clientes():
             tipo_cliente = selected_client.get("tipo_cliente", "Persona Natural")
             if tipo_cliente == "Persona Natural" or tipo_cliente == "Individual":
                 with st.form("form_modificar_cliente_persona_natural"):
-                    tipo_documento = st.selectbox("Tipo de Documento", ["Cédula", "Pasaporte"], index=["Cédula", "Pasaporte"].index(selected_client.get("tipo_documento", "Cédula")))
+                    tipos_doc_disponibles = ["Cédula", "Pasaporte", "RUC"]
+                    tipo_doc_actual = selected_client.get("tipo_documento", "Cédula")
+                    try:
+                        tipo_doc_index = tipos_doc_disponibles.index(tipo_doc_actual)
+                    except ValueError:
+                        tipo_doc_index = 0
+                    tipo_documento = st.selectbox("Tipo de Documento", tipos_doc_disponibles, index=tipo_doc_index)
                     col1, col2 = st.columns(2)
                     with col1:
                         nombres = st.text_input("Nombres (máx 50 caracteres)", value=selected_client.get("nombres", ""), key="mod_cliente_nombres")
@@ -422,9 +432,13 @@ def crud_clientes():
                         apellidos = st.text_input("Apellidos (máx 50 caracteres)", value=selected_client.get("apellidos", ""), key="mod_cliente_apellidos")
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.text(f"Tipo de Documento: {tipo_documento}")
+                        numero_documento = st.text_input("Número de Documento", value=selected_client.get("numero_documento", ""))
                     with col2:
-                        numero_documento = st.text_input("Número de Cédula/Pasaporte", value=selected_client.get("numero_documento", ""))
+                        st.empty()
+                    if tipo_documento == "Cédula" and numero_documento and len(numero_documento) != 10:
+                        st.warning("El número de Cédula debe tener exactamente 10 caracteres.")
+                    if tipo_documento == "RUC" and numero_documento and len(numero_documento) != 13:
+                        st.warning("El número de RUC debe tener exactamente 13 caracteres.")
                     col1, col2 = st.columns(2)
                     with col1:
                         fecha_nacimiento = st.date_input(

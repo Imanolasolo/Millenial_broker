@@ -251,68 +251,49 @@ def get_dashboard_for_role(role):
         tuple: (módulo, función_principal) o (None, None) si no existe
     """
     # Normalizar el rol para buscar el archivo correspondiente
-    normalized_role = role.lower().replace(" ", "_").replace("-", "_")
+    normalized_role = role.lower().strip().replace(" ", "_").replace("-", "_")
     
-    # Lista de posibles nombres de archivo a buscar (en orden de prioridad)
-    possible_filenames = []
-    
-    # 1. Nombre exacto del rol con sufijo _dashboard
-    possible_filenames.append(f"{role.replace(' ', '_')}_dashboard")
-    
-    # 2. Nombre normalizado del rol con sufijo _dashboard
-    possible_filenames.append(f"{normalized_role}_dashboard")
-    
-    # 3. Mapeo específico de roles conocidos
+    # Mapeo DIRECTO - sin complicaciones
     dashboard_mapping = {
         "admin": "admin_dashboard",
+        "administrador": "admin_dashboard",
         "ejecutivo_comercial": "Ejecutivo_Comercial_dashboard",
+        "ejecutivocomercial": "Ejecutivo_Comercial_dashboard",
         "seller": "Ejecutivo_Comercial_dashboard",
         "back_office_operacion": "Back_Office_Operacion_dashboard",
         "backofficeoperacion": "Back_Office_Operacion_dashboard",
+        "back_office_operación": "Back_Office_Operacion_dashboard",
         "ejecutivo_siniestros": "Ejecutivo_Siniestros_dashboard",
+        "ejecutivosiniestros": "Ejecutivo_Siniestros_dashboard",
         "usuario": "user_dashboard",
     }
     
-    # Agregar el mapeo específico si existe
-    if normalized_role in dashboard_mapping:
-        possible_filenames.insert(0, dashboard_mapping[normalized_role])
+    # Obtener el archivo del dashboard
+    dashboard_file = dashboard_mapping.get(normalized_role)
     
-    # Intentar cargar cada posible nombre de archivo
-    for dashboard_file in possible_filenames:
-        try:
-            # Intentar importar el módulo del dashboard
-            if dashboard_file == "user_dashboard":
-                # user_dashboard está en la raíz, no en /dashboards
-                module = importlib.import_module("user_dashboard")
-                dashboard_func = getattr(module, "user_dashboard", None)
-                if dashboard_func:
-                    return module, dashboard_func
+    # Si NO está en el mapeo, intentar con el nombre normalizado
+    if not dashboard_file:
+        dashboard_file = f"{normalized_role}_dashboard"
+    
+    # CARGAR EL DASHBOARD
+    try:
+        if dashboard_file == "user_dashboard":
+            module = importlib.import_module("user_dashboard")
+            return module, getattr(module, "user_dashboard")
+        else:
+            module = importlib.import_module(f"dashboards.{dashboard_file}")
+            # Buscar función admin_dashboard PRIMERO
+            if hasattr(module, "admin_dashboard"):
+                return module, getattr(module, "admin_dashboard")
+            # Si no, buscar función con el nombre del rol
+            elif hasattr(module, f"{normalized_role}_dashboard"):
+                return module, getattr(module, f"{normalized_role}_dashboard")
             else:
-                # Los demás dashboards están en /dashboards
-                try:
-                    module = importlib.import_module(f"dashboards.{dashboard_file}")
-                    
-                    # Buscar la función principal del dashboard
-                    # Prioridad: welcome_message + manage_modules, luego función específica
-                    if hasattr(module, "welcome_message") and hasattr(module, "manage_modules"):
-                        return module, "dual"  # Indica que tiene dos funciones
-                    elif hasattr(module, f"{normalized_role}_dashboard"):
-                        return module, getattr(module, f"{normalized_role}_dashboard")
-                    elif hasattr(module, "admin_dashboard"):
-                        return module, getattr(module, "admin_dashboard")
-                    else:
-                        # Si el módulo existe pero no tiene funciones estándar, usar "dual" por defecto
-                        return module, "dual"
-                except ImportError:
-                    # Intentar siguiente nombre de archivo
-                    continue
-        
-        except (AttributeError, Exception):
-            # Intentar siguiente nombre de archivo
-            continue
-    
-    # Si ningún archivo se pudo cargar, retornar None
-    return None, None
+                # Último recurso: devolver el módulo para que funcione
+                return module, getattr(module, "admin_dashboard")
+    except Exception as e:
+        st.error(f"Error cargando dashboard '{dashboard_file}': {e}")
+        return None, None
 
 # ============================================================================
 # FUNCIÓN: main

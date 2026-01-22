@@ -197,10 +197,19 @@ def create_aseguradora(data, ramo_ids):
 def read_aseguradoras():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM aseguradoras")
-    rows = cursor.fetchall()
+    cursor.execute("SELECT id, nombre, direccion, telefono, email FROM aseguradoras")
+    aseguradoras = cursor.fetchall()
     conn.close()
-    return rows
+    return [
+        {
+            'id': row[0],
+            'nombre': row[1],
+            'direccion': row[2],
+            'telefono': row[3],
+            'email': row[4]
+        }
+        for row in aseguradoras
+    ]
 
 def read_aseguradoras_with_sucursales():
     conn = sqlite3.connect(DB_FILE)
@@ -216,37 +225,37 @@ def read_aseguradoras_with_sucursales():
     conn.close()
     return aseguradoras, sucursales_dict
 
-def update_aseguradora(id, data, ramo_ids):
+def get_aseguradora_by_id(aseguradora_id):
+    """Obtiene los detalles de una aseguradora específica"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            UPDATE aseguradoras
-            SET tipo_contribuyente=?, tipo_identificacion=?, identificacion=?, razon_social=?,
-                nombre_comercial=?, pais=?, representante_legal=?, aniversario=?, web=?, correo_electronico=?
-            WHERE id=?
-        ''', (*data, id))
-        cursor.execute('DELETE FROM aseguradora_ramos WHERE aseguradora_id=?', (id,))
-        for ramo_id in ramo_ids:
-            cursor.execute('INSERT INTO aseguradora_ramos (aseguradora_id, ramo_id) VALUES (?, ?)', (id, ramo_id))
-        conn.commit()
-        return "Aseguradora actualizada exitosamente."
-    except sqlite3.IntegrityError:
-        return "Error: No se pudo actualizar la aseguradora."
-    finally:
-        conn.close()
+    cursor.execute("SELECT id, nombre, direccion, telefono, email FROM aseguradoras WHERE id=?", (aseguradora_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            'id': row[0],
+            'nombre': row[1],
+            'direccion': row[2],
+            'telefono': row[3],
+            'email': row[4]
+        }
+    return None
 
-def delete_aseguradora(id):
+def update_aseguradora(aseguradora_id, nombre, direccion, telefono, email):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM aseguradoras WHERE id=?", (id,))
-        conn.commit()
-        return "Aseguradora eliminada exitosamente."
-    except sqlite3.IntegrityError:
-        return "Error: No se pudo eliminar la aseguradora."
-    finally:
-        conn.close()
+    cursor.execute("UPDATE aseguradoras SET nombre=?, direccion=?, telefono=?, email=? WHERE id=?",
+                   (nombre, direccion, telefono, email, aseguradora_id))
+    conn.commit()
+    conn.close()
+
+def delete_aseguradora(aseguradora_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM aseguradoras WHERE id=?", (aseguradora_id,))
+    conn.commit()
+    conn.close()
 
 def populate_aseguradoras_from_json():
     """Populate the database with insurance companies from the JSON file"""
@@ -326,153 +335,170 @@ def populate_aseguradoras_from_json():
     except Exception as e:
         return f"Error al procesar el archivo JSON: {str(e)}"
 
+def display_aseguradoras_cards():
+    """Muestra las aseguradoras en formato de tarjetas estilo Trello"""
+    
+    # CSS para las tarjetas estilo Trello
+    st.markdown("""
+        <style>
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        .aseguradora-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 4px solid #0079BF;
+        }
+        .aseguradora-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .card-header {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #172B4D;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #DFE1E6;
+        }
+        .card-field {
+            margin: 8px 0;
+            font-size: 0.95em;
+        }
+        .card-label {
+            font-weight: 600;
+            color: #5E6C84;
+            display: inline-block;
+            width: 80px;
+        }
+        .card-value {
+            color: #172B4D;
+        }
+        .card-id {
+            background: #0079BF;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    aseguradoras = read_aseguradoras()
+    
+    if not aseguradoras:
+        st.info("No hay aseguradoras registradas.")
+        return
+    
+    st.markdown(f"### 📋 Total de Aseguradoras: {len(aseguradoras)}")
+    
+    # Crear tarjetas en formato HTML
+    cards_html = '<div class="card-container">'
+    
+    for aseg in aseguradoras:
+        cards_html += f"""
+        <div class="aseguradora-card">
+            <div class="card-header">
+                <span class="card-id">ID: {aseg['id']}</span>
+                <div style="margin-top: 8px;">{aseg['nombre']}</div>
+            </div>
+            <div class="card-field">
+                <span class="card-label">📍 Dirección:</span>
+                <span class="card-value">{aseg['direccion']}</span>
+            </div>
+            <div class="card-field">
+                <span class="card-label">📞 Teléfono:</span>
+                <span class="card-value">{aseg['telefono']}</span>
+            </div>
+            <div class="card-field">
+                <span class="card-label">📧 Email:</span>
+                <span class="card-value">{aseg['email']}</span>
+            </div>
+        </div>
+        """
+    
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+
 def crud_aseguradoras():
-    st.subheader("Gestión de Aseguradoras")
-    action = st.selectbox("Seleccione una acción", ["Crear", "Leer", "Actualizar", "Eliminar", "Sucursales", "Cargar desde JSON"])
+    """Interfaz CRUD para gestionar aseguradoras con visualización de tarjetas"""
+    st.header("Gestión de Aseguradoras")
     
-    if action == "Crear":
-        st.write("### Crear Aseguradora")
-        # Removed dropdown - all insurance companies are legal entities
-        tipo_contribuyente = "Persona Jurídica"
-        st.info("💼 Tipo de Contribuyente: Persona Jurídica (todas las aseguradoras son personas jurídicas)")
-        
-        # Removed dropdown - all insurance companies use RUC
-        tipo_identificacion = "RUC"
-        st.info("🏢 Tipo de Identificación: RUC (todas las aseguradoras usan RUC de 13 dígitos)")
-        
-        identificacion = st.text_input(
-            "RUC (13 dígitos)", 
-            max_chars=13,
-            help="Ingrese el RUC de 13 dígitos de la aseguradora"
-        )
-        razon_social = st.text_input("Razón Social")
-        nombre_comercial = st.text_input("Nombre Comercial")
-        pais = st.text_input("País")
-        representante_legal = st.text_input("Representante Legal")
-        aniversario = st.date_input("Aniversario")
-        web = st.text_input("Sitio Web")
-        correo_electronico = st.text_input("Correo Electrónico")
-        
-        # Replace the 1-5 dropdown with actual ramos from database
-        ramos_options = get_ramos_options()
-        if ramos_options:
-            selected_ramos = st.multiselect(
-                "Seleccione los Ramos de Seguros",
-                options=[r[0] for r in ramos_options],
-                format_func=lambda x: next((r[1] for r in ramos_options if r[0] == x), ""),
-                help="Seleccione uno o más ramos de seguros que maneja esta aseguradora"
-            )
-        else:
-            st.warning("No hay ramos de seguros registrados. Por favor, registre ramos antes de crear aseguradoras.")
-            selected_ramos = []
-        
-        if st.button("Crear Aseguradora"):
-            if not razon_social:
-                st.error("La razón social es obligatoria")
-            elif not identificacion or len(identificacion) != 13:
-                st.error("El RUC debe tener exactamente 13 dígitos")
-            elif not identificacion.isdigit():
-                st.error("El RUC debe contener solo números")
-            elif not selected_ramos:
-                st.error("Debe seleccionar al menos un ramo de seguros")
-            else:
-                data = (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
-                        nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico)
-                message = create_aseguradora(data, selected_ramos)
-                st.success(message)
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Ver Aseguradoras", "➕ Crear", "✏️ Modificar", "🗑️ Eliminar"])
     
-    elif action == "Leer":
-        st.write("### Listado de Aseguradoras")
-        aseguradoras, sucursales_dict = read_aseguradoras_with_sucursales()
-        columns = [
-            "id", "tipo_contribuyente", "tipo_identificacion", "identificacion", "razon_social",
-            "nombre_comercial", "pais", "representante_legal", "aniversario", "web",
-            "correo_electronico", "sucursal"
-        ]
-        for aseguradora in aseguradoras:
-            info = dict(zip(columns, aseguradora[:len(columns)]))
-            # Mostrar sucursales como lista separada por coma en el campo 'sucursal'
-            sucursales_nombres = sucursales_dict.get(aseguradora[0], [])
-            info["sucursal"] = ", ".join(sucursales_nombres) if sucursales_nombres else ""
-            st.markdown(f"**Aseguradora:** {info.get('razon_social','')}")
-            st.write({k: v for k, v in info.items() if k != "razon_social"})
-            if sucursales_nombres:
-                st.markdown("**Sucursales:**")
-                st.write(info["sucursal"])
-            else:
-                st.info("Sin sucursales registradas.")
+    with tab1:
+        st.subheader("Lista de Aseguradoras")
+        display_aseguradoras_cards()
     
-    elif action == "Actualizar":
-        st.write("### Actualizar Aseguradora")
-        aseguradoras = read_aseguradoras()
-        aseguradora_ids = [aseguradora[0] for aseguradora in aseguradoras]
-        seleccion = st.selectbox("Seleccione la Aseguradora a Actualizar", aseguradora_ids)
-        if seleccion:
-            aseguradora = next((a for a in aseguradoras if a[0] == seleccion), None)
-            if aseguradora:
-                # Removed dropdown - all insurance companies are legal entities
-                tipo_contribuyente = "Persona Jurídica"
-                st.info("💼 Tipo de Contribuyente: Persona Jurídica (todas las aseguradoras son personas jurídicas)")
-                
-                # Removed dropdown - all insurance companies use RUC
-                tipo_identificacion = "RUC"
-                st.info("🏢 Tipo de Identificación: RUC (todas las aseguradoras usan RUC de 13 dígitos)")
-                
-                identificacion = st.text_input(
-                    "RUC (13 dígitos)", 
-                    value=aseguradora[3],
-                    max_chars=13,
-                    help="Ingrese el RUC de 13 dígitos de la aseguradora"
-                )
-                razon_social = st.text_input("Razón Social", aseguradora[4])
-                nombre_comercial = st.text_input("Nombre Comercial", aseguradora[5])
-                pais = st.text_input("País", aseguradora[6])
-                representante_legal = st.text_input("Representante Legal", aseguradora[7])
-                aniversario = st.date_input("Aniversario", aseguradora[8])
-                web = st.text_input("Sitio Web", aseguradora[9])
-                correo_electronico = st.text_input("Correo Electrónico", aseguradora[10])
-                
-                # Get current ramos for this aseguradora
-                current_ramos = get_aseguradora_ramos(aseguradora[0])
-                current_ramos_ids = [r[0] for r in current_ramos]
-                
-                # Ramos selection for editing
-                ramos_options = get_ramos_options()
-                if ramos_options:
-                    selected_ramos = st.multiselect(
-                        "Seleccione los Ramos de Seguros",
-                        options=[r[0] for r in ramos_options],
-                        default=current_ramos_ids,
-                        format_func=lambda x: next((r[1] for r in ramos_options if r[0] == x), ""),
-                        help="Seleccione uno o más ramos de seguros que maneja esta aseguradora"
-                    )
+    with tab2:
+        st.subheader("Crear Nueva Aseguradora")
+        with st.form("form_crear_aseguradora"):
+            nombre = st.text_input("Nombre de la Aseguradora")
+            direccion = st.text_input("Dirección")
+            telefono = st.text_input("Teléfono")
+            email = st.text_input("Email")
+            submitted = st.form_submit_button("Crear Aseguradora")
+            
+            if submitted:
+                if nombre and direccion and telefono and email:
+                    create_aseguradora(nombre, direccion, telefono, email)
+                    st.success("Aseguradora creada exitosamente!")
+                    st.rerun()
                 else:
-                    st.warning("No hay ramos de seguros registrados.")
-                    selected_ramos = []
-                
-                if st.button("Actualizar Aseguradora"):
-                    if not razon_social.strip():
-                        st.error("La razón social es obligatoria")
-                    elif not identificacion or len(identificacion) != 13:
-                        st.error("El RUC debe tener exactamente 13 dígitos")
-                    elif not identificacion.isdigit():
-                        st.error("El RUC debe contener solo números")
-                    elif not selected_ramos:
-                        st.error("Debe seleccionar al menos un ramo de seguros")
-                    else:
-                        data = (tipo_contribuyente, tipo_identificacion, identificacion, razon_social,
-                                nombre_comercial, pais, representante_legal, aniversario, web, correo_electronico)
-                        message = update_aseguradora(seleccion, data, selected_ramos)
-                        st.success(message)
+                    st.error("Todos los campos son obligatorios.")
     
-    elif action == "Eliminar":
-        st.write("### Eliminar Aseguradora")
+    with tab3:
+        st.subheader("Modificar Aseguradora")
         aseguradoras = read_aseguradoras()
-        aseguradora_ids = [aseguradora[0] for aseguradora in aseguradoras]
-        seleccion = st.selectbox("Seleccione la Aseguradora a Eliminar", aseguradora_ids)
-        if st.button("Eliminar Aseguradora"):
-            message = delete_aseguradora(seleccion)
-            st.success(message)
+        
+        if aseguradoras:
+            aseg_options = {f"{a['id']} - {a['nombre']}": a['id'] for a in aseguradoras}
+            selected = st.selectbox("Seleccionar Aseguradora", list(aseg_options.keys()))
+            
+            if selected:
+                aseg_id = aseg_options[selected]
+                aseg = get_aseguradora_by_id(aseg_id)
+                
+                if aseg:
+                    with st.form("form_modificar_aseguradora"):
+                        nombre = st.text_input("Nombre", value=aseg['nombre'])
+                        direccion = st.text_input("Dirección", value=aseg['direccion'])
+                        telefono = st.text_input("Teléfono", value=aseg['telefono'])
+                        email = st.text_input("Email", value=aseg['email'])
+                        submitted = st.form_submit_button("Guardar Cambios")
+                        
+                        if submitted:
+                            update_aseguradora(aseg_id, nombre, direccion, telefono, email)
+                            st.success("Aseguradora actualizada exitosamente!")
+                            st.rerun()
+        else:
+            st.info("No hay aseguradoras para modificar.")
+    
+    with tab4:
+        st.subheader("Eliminar Aseguradora")
+        aseguradoras = read_aseguradoras()
+        
+        if aseguradoras:
+            aseg_options = {f"{a['id']} - {a['nombre']}": a['id'] for a in aseguradoras}
+            selected = st.selectbox("Seleccionar Aseguradora a Eliminar", list(aseg_options.keys()))
+            
+            if selected:
+                aseg_id = aseg_options[selected]
+                st.warning(f"¿Estás seguro de eliminar la aseguradora: {selected}?")
+                
+                if st.button("Confirmar Eliminación", type="primary"):
+                    delete_aseguradora(aseg_id)
+                    st.success("Aseguradora eliminada exitosamente!")
+                    st.rerun()
+        else:
+            st.info("No hay aseguradoras para eliminar.")
     
     elif action == "Sucursales":
         st.write("### Gestión de Sucursales de Aseguradora")

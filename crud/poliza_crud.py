@@ -707,7 +707,7 @@ def crud_polizas():
                     ["Tarjeta de crédito", "Transferencia", "Débito", "Refinanciamiento"]
                 )
                 # Tipo de Factura después de anexos
-                tipo_factura = st.selectbox("Tipo de Factura", ["Física", "Electrónica", "Otro"])
+                tipo_factura = st.selectbox("Tipo de Factura", ["Electrónica", "Otro"])
                 
                 st.markdown("### Información Factura")
                 col1, col2 = st.columns(2)
@@ -772,19 +772,19 @@ def crud_polizas():
                     subtotal_calculado = "0.00"
                 
                 subtotal = st.text_input(
-                    "Subtotal (Prima Neta + Contrib S.C.V.S. + Seguro Campesino + Derechos)",
+                    "Subtotal (Prima Neta + Contrib S.C.V.S. + Seguro Campesino + Derechos Emisión)",
                     value=subtotal_calculado,
                     disabled=True,
-                    help="Calculado automáticamente como la suma de Prima Neta + Contribuciones + Derechos"
+                    help="Calculado automáticamente como la suma de Prima Neta + Contribuciones + Derechos de Emisión"
                 )
                 col1,col2,col3,col4 = st.columns(4)
                 with col1:
-                    # Calcular IVA como 15% del subtotal
+                    # Calcular IVA como 15% del subtotal (que ya incluye derechos de emisión)
                     iva_15_calculado = ""
                     if subtotal_calculado:
                         try:
                             subtotal_valor = float(subtotal_calculado)
-                            iva_15_valor = subtotal_valor * 0.15  # 15%
+                            iva_15_valor = subtotal_valor * 0.15  # 15% del subtotal (que incluye derechos)
                             iva_15_calculado = f"{iva_15_valor:.2f}"
                         except ValueError:
                             iva_15_calculado = "0.00"
@@ -795,7 +795,7 @@ def crud_polizas():
                         "IVA (15% del Subtotal)", 
                         value=iva_15_calculado,
                         disabled=True,
-                        help="Calculado automáticamente como 15% del Subtotal"
+                        help="Calculado automáticamente como 15% del Subtotal (que incluye Prima Neta + Contribuciones + Derechos de Emisión)"
                     )
                 with col2:
                     # Campo eliminado: C.Solidaria(2%)

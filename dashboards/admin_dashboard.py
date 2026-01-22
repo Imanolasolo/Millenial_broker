@@ -27,7 +27,7 @@ import re  # Expresiones regulares
 # Importa todas las interfaces CRUD desde el directorio crud/
 from crud.user_crud import crud_usuarios, get_user_details  # Gestión de usuarios
 from crud.client_crud import crud_clientes  # Gestión de clientes
-from crud.aseguradora_crud import crud_aseguradoras  # Gestión de aseguradoras
+from crud.aseguradoras_crud import crud_aseguradoras  # Gestión de aseguradoras - CORREGIDO
 from crud.agencias_crud import crud_agencias  # Gestión de agencias
 from crud.role_crud import crud_roles  # Gestión de roles
 from crud.poliza_crud import crud_polizas  # Gestión de pólizas
@@ -220,3 +220,6 @@ def admin_dashboard():
         del st.session_state["token"]  # Eliminar el token de la sesión
         st.success("Sesión cerrada exitosamente")
         st.rerun()  # Recargar la página para volver al login
+
+# Asegurar que la función esté disponible para importación
+__all__ = ['admin_dashboard']
